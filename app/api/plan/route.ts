@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -13,7 +13,10 @@ export async function POST(request: NextRequest) {
     const { destination, origin, startDate, endDate, budget, travelers, interests } = body;
 
     if (!destination || !origin || !startDate || !endDate || !budget || !interests) {
-      return NextResponse.json({ error: "Please fill in all required fields." }, { status: 400 });
+      return new Response(
+        JSON.stringify({ error: "Please fill in all required fields." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     const days = Math.ceil(
@@ -21,7 +24,10 @@ export async function POST(request: NextRequest) {
     );
 
     if (days <= 0) {
-      return NextResponse.json({ error: "End date must be after start date." }, { status: 400 });
+      return new Response(
+        JSON.stringify({ error: "End date must be after start date." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
     const today = new Date().toISOString().split("T")[0];
@@ -33,18 +39,18 @@ CRITICAL RULES (these prevent you from being useless):
 2. ACCOUNT FOR SEASONALITY. Hostel and flight prices vary massively by month.
 3. NAME specific places. "Wombat's Hostel near Liverpool Street, £40/night in July" not "a hostel for £20".
 4. BE HONEST ABOUT BUDGET FEASIBILITY. If €X is genuinely too tight, say so in the FIRST sentence.
-5. EXPLAIN LOCAL CONCEPTS visitors won't intuit (e.g. tap-in/tap-out, validation rules, queueing norms, tipping etiquette).
-6. INCLUDE A SAFETY SECTION with realistic concerns (pickpocketing hotspots, phone snatching patterns, common scams, areas to be cautious at night). Be matter-of-fact, never fear-mongering.
+5. EXPLAIN LOCAL CONCEPTS visitors won't intuit (tap-in/tap-out, validation rules, queueing norms, tipping etiquette).
+6. INCLUDE A SAFETY SECTION with realistic concerns (pickpocketing hotspots, phone snatching patterns, common scams). Matter-of-fact, never fear-mongering.
 
 Trip details:
 - Traveler departing from: ${origin}
 - Destination: ${destination}
-- Travel dates: ${startDate} to ${endDate} (${days} days) — NOTE THE SEASON when pricing
+- Travel dates: ${startDate} to ${endDate} (${days} days)
 - Group size: ${travelers} traveler(s)
 - Total budget: €${budget}
 - What they want: ${interests}
 
-Today's date is ${today}. USE WEB SEARCH to verify CURRENT prices for the SPECIFIC season of travel.
+Today's date is ${today}. USE WEB SEARCH to verify CURRENT prices for the SPECIFIC season.
 
 Deliver this exact structure:
 
@@ -52,78 +58,98 @@ Deliver this exact structure:
 3 sentences max. Most important budget reality, one thing to book TODAY, biggest watch-out.
 
 ## Reality check
-Is the budget realistic for what they want, AT THIS TIME OF YEAR? Current gotchas. If €${budget} genuinely doesn't work for ${days} days in ${destination} this season, say it directly in the first sentence.
+Is the budget realistic AT THIS TIME OF YEAR? Current gotchas. If €${budget} genuinely doesn't work, say it directly in the first sentence.
 
 ## Book today
-Items to book NOW because prices rise daily. Flights, transit passes, popular reservations.
+Items to book NOW because prices rise daily.
 
 ## Budget breakdown
-Real numbers based on CURRENT seasonal prices. Split across: lodging, food, transit, activities, buffer. If total exceeds €${budget}, flag "OVER BUDGET BY €X" and suggest cuts.
+Real numbers based on CURRENT seasonal prices. Lodging, food, transit, activities, buffer. If total exceeds €${budget}, flag "OVER BUDGET BY €X" and suggest cuts.
 
 ## Getting there
-From ${origin} → ${destination}. Recommend airline + cheapest day of week + current price range + booking site. Airport-to-city transfer with exact transit info.
+From ${origin} → ${destination}. Cheapest airline + best day of week + current prices + booking site. Airport-to-city transfer.
 
 ## Where to stay
-Skip this section if user mentions staying with friends/partner. Otherwise: at least 3 NAMED options across price points with current seasonal prices and neighborhoods.
+Skip if user mentions staying with friends/partner. Otherwise 3 NAMED options at different price points with seasonal prices.
 
 ## Local transit
-Exact pass for THIS LENGTH OF TRIP. Where to buy. Cost. Validation rules. Fine for not validating. Then 2-3 sentences explaining HOW THE SYSTEM WORKS for someone unfamiliar with it.
+Exact pass for this trip length. Where to buy. Cost. Validation rules. Fine for not validating. Then 2-3 sentences explaining HOW THE SYSTEM WORKS for someone unfamiliar with it.
 
 ## Day-by-day plan
-Day 1 = arrival day, last day = departure day. Account for airport time. For each day, 4-6 stops with: time, place + neighborhood + nearest transit stop, real price (or "free"), 1-line honest assessment, watch-outs.
+Day 1 = arrival, last day = departure. Account for airport time. For each day, 4-6 stops with: time, place + neighborhood + nearest transit stop, real price, 1-line honest assessment, watch-outs.
 
 ## Tourist traps to skip
-Specific named places NOT worth it, with what to do instead.
+Specific places NOT worth it with what to do instead.
 
 ## Cheap food map
-3-5 named places locals actually eat at. Honest daily food budget. Price ranges. What to order.
+3-5 named places locals actually eat at. Honest daily food budget. Price ranges.
 
 ## Safety briefing
-Real local concerns. Specific examples: pickpocket hotspots, phone snatching patterns, common scams, areas to be cautious at night.
+Specific examples: pickpocket hotspots, phone snatching patterns, common scams, areas to be cautious at night.
 
 ## Local quirks
-3-5 things outsiders DON'T intuit. Examples: escalator side, queueing, tipping, restaurant etiquette.
+3-5 things outsiders DON'T intuit. Escalator side, queueing, tipping, restaurant etiquette.
 
 ## Practical
 SIM/eSIM, tipping norms, tap water, emergency number, useful local apps.
 
 ## Verify before booking
-3-5 specific claims to double-check on official sites before committing money.
+3-5 specific claims to double-check before committing money.
 
 FINAL RULES:
 - NEVER write "around" or "approximately" for prices.
-- If touristy AND worth it, say so. If touristy and NOT worth it, say so.
-- For uncertain prices, add "(verify current)" next to them.
-- No filler, no clichés, no marketing voice. Markdown formatting only.`;
+- If touristy AND worth it, say so. If touristy and NOT, say so.
+- For uncertain prices add "(verify current)".
+- No filler, no clichés, no marketing voice. Markdown only.`;
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 12000,
-      tools: [
-        {
-          type: "web_search_20250305",
-          name: "web_search",
-          max_uses: 15,
-        },
-      ],
-      messages: [{ role: "user", content: prompt }],
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const messageStream = client.messages.stream({
+            model: "claude-sonnet-4-6",
+            max_tokens: 12000,
+            tools: [
+              {
+                type: "web_search_20250305",
+                name: "web_search",
+                max_uses: 15,
+              },
+            ],
+            messages: [{ role: "user", content: prompt }],
+          });
+
+          for await (const event of messageStream) {
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              controller.enqueue(encoder.encode(event.delta.text));
+            }
+          }
+
+          controller.close();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Stream error";
+          controller.enqueue(encoder.encode(`\n\n[Error: ${message}]`));
+          controller.close();
+        }
+      },
     });
 
-    let fullText = "";
-    for (const block of response.content) {
-      if (block.type === "text") {
-        fullText += block.text;
-      }
-    }
-
-    if (!fullText) {
-      return NextResponse.json({ error: "No text content returned. Try again." }, { status: 500 });
-    }
-
-    return NextResponse.json({ itinerary: fullText });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+      },
+    });
   } catch (error) {
     console.error("API error:", error);
     const message = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
