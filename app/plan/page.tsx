@@ -15,22 +15,36 @@ export default function PlanPage() {
   const [itinerary, setItinerary] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const places = useMemo<Place[]>(() => {
-    if (loading || !itinerary) return [];
-    const match = itinerary.match(/```json\s*([\s\S]+?)```/);
-    if (!match) return [];
-    try {
-      const parsed = JSON.parse(match[1]);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }, [itinerary, loading]);
+  const { places, cleanedItinerary } = useMemo<{
+  places: Place[];
+  cleanedItinerary: string;
+}>(() => {
+  if (loading || !itinerary) {
+    return { places: [], cleanedItinerary: itinerary };
+  }
 
-  const cleanedItinerary = useMemo(
-    () => itinerary.replace(/```json\s*[\s\S]+?```/, "").trim(),
-    [itinerary]
-  );
+  // Try fenced JSON first, then fall back to raw JSON array containing lat/lng
+  const fencedMatch = itinerary.match(/```json\s*([\s\S]+?)```/);
+  const rawMatch = itinerary.match(/(\[\s*\{[\s\S]*?"lat"[\s\S]*?\}\s*\])/);
+  const jsonStr = fencedMatch?.[1] || rawMatch?.[1];
+
+  let parsedPlaces: Place[] = [];
+  if (jsonStr) {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) parsedPlaces = parsed;
+    } catch {}
+  }
+
+  // Strip everything from "## Map data" onwards AND any leftover json blocks
+  const cleaned = itinerary
+    .replace(/##\s*Map\s+data[\s\S]*$/i, "")
+    .replace(/```json\s*[\s\S]+?```/g, "")
+    .replace(/\[\s*\{[\s\S]*?"lat"[\s\S]*?\}\s*\]/g, "")
+    .trim();
+
+  return { places: parsedPlaces, cleanedItinerary: cleaned };
+}, [itinerary, loading]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
