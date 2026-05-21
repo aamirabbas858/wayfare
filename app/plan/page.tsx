@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,11 +8,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import TripMap, { type Place } from "@/components/TripMap";
 
 export default function PlanPage() {
   const [loading, setLoading] = useState(false);
   const [itinerary, setItinerary] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+
+  const places = useMemo<Place[]>(() => {
+    if (loading || !itinerary) return [];
+    const match = itinerary.match(/```json\s*([\s\S]+?)```/);
+    if (!match) return [];
+    try {
+      const parsed = JSON.parse(match[1]);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [itinerary, loading]);
+
+  const cleanedItinerary = useMemo(
+    () => itinerary.replace(/```json\s*[\s\S]+?```/, "").trim(),
+    [itinerary]
+  );
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,7 +67,6 @@ export default function PlanPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value, { stream: true });
         accumulated += chunk;
         setItinerary(accumulated);
@@ -177,6 +194,8 @@ export default function PlanPage() {
               )}
             </div>
 
+            <TripMap places={places} />
+
             <article>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -207,7 +226,7 @@ export default function PlanPage() {
                   hr: () => <hr className="my-8 border-neutral-200 dark:border-neutral-800" />,
                 }}
               >
-                {itinerary}
+                {cleanedItinerary}
               </ReactMarkdown>
             </article>
           </>
