@@ -96,11 +96,29 @@ SIM/eSIM, tipping norms, tap water, emergency number, useful local apps.
 ## Verify before booking
 3-5 specific claims to double-check before committing money.
 
+## Map data
+At the very end of your response, include a single JSON code block with ALL the named places (cafes, restaurants, attractions, museums, parks, neighborhoods) you mentioned in the day-by-day plan. Include lat/lng coordinates — use your best estimate based on the location. The user's map depends on this.
+
+Format EXACTLY like this (no other text after it):
+
+\`\`\`json
+[
+  {"name": "Bonanza Coffee Heroes", "address": "Oderberger Str. 35", "lat": 52.5398, "lng": 13.4051, "day": 1, "type": "cafe"},
+  {"name": "East Side Gallery", "address": "Mühlenstr. 3-100", "lat": 52.5050, "lng": 13.4395, "day": 1, "type": "attraction"}
+]
+\`\`\`
+
+Rules for the JSON:
+- Include EVERY place mentioned in the day-by-day plan
+- Use realistic lat/lng (Claude knows coordinates for famous places; for obscure ones, approximate based on the neighborhood)
+- "type" can be: cafe, restaurant, attraction, museum, park, market, bar, transit, hotel, neighborhood
+- "day" matches the day in the itinerary
+
 FINAL RULES:
 - NEVER write "around" or "approximately" for prices.
 - If touristy AND worth it, say so. If touristy and NOT, say so.
 - For uncertain prices add "(verify current)".
-- No filler, no clichés, no marketing voice. Markdown only.`;
+- No filler, no clichés, no marketing voice. Markdown for the main response.`;
 
     const encoder = new TextEncoder();
 
