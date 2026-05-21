@@ -54,7 +54,7 @@ Today's date is ${today}. USE WEB SEARCH to verify CURRENT prices for the SPECIF
 
 Deliver this exact structure:
 
-## TL;DR
+## The Essentials
 3 sentences max. Most important budget reality, one thing to book TODAY, biggest watch-out.
 
 ## Reality check
