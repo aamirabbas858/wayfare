@@ -19,16 +19,33 @@ export default function PlanPage() {
   places: Place[];
   cleanedItinerary: string;
 }>(() => {
-  if (loading || !itinerary) {
+  if (!itinerary) {
     return { places: [], cleanedItinerary: itinerary };
   }
 
-  // Try fenced JSON first, then fall back to raw JSON array containing lat/lng
-  const fencedMatch = itinerary.match(/```json\s*([\s\S]+?)```/);
-  const rawMatch = itinerary.match(/(\[\s*\{[\s\S]*?"lat"[\s\S]*?\}\s*\])/);
-  const jsonStr = fencedMatch?.[1] || rawMatch?.[1];
+  // Find the earliest marker that indicates the JSON block begins.
+  // Cut everything from that point onward — that's our display text.
+  const markerPositions = [
+    itinerary.indexOf("```json"),
+    itinerary.search(/##\s*Map\s+[Dd]ata/),
+    itinerary.search(/\n\[\s*\{[^[]*"lat"/),
+  ].filter((i) => i > 0);
 
+  const cutPoint =
+    markerPositions.length > 0 ? Math.min(...markerPositions) : itinerary.length;
+
+  const cleaned = itinerary.substring(0, cutPoint).trim();
+
+  // Now parse the JSON from the remainder of the original text
+  const remainder = itinerary.substring(cutPoint);
   let parsedPlaces: Place[] = [];
+
+  // Try fenced ```json ... ``` first
+  const fencedMatch = remainder.match(/```json\s*([\s\S]+?)```/);
+  // Then try raw JSON array containing "lat"
+  const rawMatch = remainder.match(/(\[\s*\{[\s\S]*"lat"[\s\S]*\}\s*\])/);
+
+  const jsonStr = fencedMatch?.[1] || rawMatch?.[1];
   if (jsonStr) {
     try {
       const parsed = JSON.parse(jsonStr);
@@ -36,15 +53,8 @@ export default function PlanPage() {
     } catch {}
   }
 
-  // Strip everything from "## Map data" onwards AND any leftover json blocks
-  const cleaned = itinerary
-    .replace(/##\s*Map\s+data[\s\S]*$/i, "")
-    .replace(/```json\s*[\s\S]+?```/g, "")
-    .replace(/\[\s*\{[\s\S]*?"lat"[\s\S]*?\}\s*\]/g, "")
-    .trim();
-
   return { places: parsedPlaces, cleanedItinerary: cleaned };
-}, [itinerary, loading]);
+}, [itinerary]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
