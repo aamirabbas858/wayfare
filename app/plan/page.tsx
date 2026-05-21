@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,45 +16,48 @@ export default function PlanPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { places, cleanedItinerary } = useMemo<{
-  places: Place[];
-  cleanedItinerary: string;
-}>(() => {
-  if (!itinerary) {
-    return { places: [], cleanedItinerary: itinerary };
-  }
+    places: Place[];
+    cleanedItinerary: string;
+  }>(() => {
+    if (!itinerary) {
+      return { places: [], cleanedItinerary: itinerary };
+    }
 
-  // Find the earliest marker that indicates the JSON block begins.
-  // Cut everything from that point onward — that's our display text.
-  const markerPositions = [
-    itinerary.indexOf("```json"),
-    itinerary.search(/##\s*Map\s+[Dd]ata/),
-    itinerary.search(/\n\[\s*\{[^[]*"lat"/),
-  ].filter((i) => i > 0);
+    const markerPositions = [
+      itinerary.indexOf("```json"),
+      itinerary.search(/##\s*Map\s+[Dd]ata/),
+      itinerary.search(/\n\[\s*\{[^[]*"lat"/),
+    ].filter((i) => i > 0);
 
-  const cutPoint =
-    markerPositions.length > 0 ? Math.min(...markerPositions) : itinerary.length;
+    const cutPoint =
+      markerPositions.length > 0 ? Math.min(...markerPositions) : itinerary.length;
 
-  const cleaned = itinerary.substring(0, cutPoint).trim();
+    const cleaned = itinerary.substring(0, cutPoint).trim();
+    const remainder = itinerary.substring(cutPoint);
 
-  // Now parse the JSON from the remainder of the original text
-  const remainder = itinerary.substring(cutPoint);
-  let parsedPlaces: Place[] = [];
+    let parsedPlaces: Place[] = [];
+    const fencedMatch = remainder.match(/```json\s*([\s\S]+?)```/);
+    const rawMatch = remainder.match(/(\[\s*\{[\s\S]*"lat"[\s\S]*\}\s*\])/);
+    const jsonStr = fencedMatch?.[1] || rawMatch?.[1];
 
-  // Try fenced ```json ... ``` first
-  const fencedMatch = remainder.match(/```json\s*([\s\S]+?)```/);
-  // Then try raw JSON array containing "lat"
-  const rawMatch = remainder.match(/(\[\s*\{[\s\S]*"lat"[\s\S]*\}\s*\])/);
+    if (jsonStr) {
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (Array.isArray(parsed)) parsedPlaces = parsed;
+      } catch {}
+    }
 
-  const jsonStr = fencedMatch?.[1] || rawMatch?.[1];
-  if (jsonStr) {
-    try {
-      const parsed = JSON.parse(jsonStr);
-      if (Array.isArray(parsed)) parsedPlaces = parsed;
-    } catch {}
-  }
+    return { places: parsedPlaces, cleanedItinerary: cleaned };
+  }, [itinerary]);
 
-  return { places: parsedPlaces, cleanedItinerary: cleaned };
-}, [itinerary]);
+  // DEBUG LOGGING — remove later
+  useEffect(() => {
+    if (itinerary && !loading) {
+      console.log("=== RAW ITINERARY (last 2000 chars) ===");
+      console.log(itinerary.slice(-2000));
+      console.log("=== PLACES PARSED ===", places);
+    }
+  }, [itinerary, loading, places]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
