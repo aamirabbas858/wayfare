@@ -21,7 +21,11 @@ It's supposed to feel like advice from a friend who actually lives in the city y
 
 ## Screenshots
 
-> Add screenshots here: the landing page, a planner form filled in, a generated itinerary, and the map with colored pins. PNG or GIF works. Drag them into the repo and reference with `![alt text](./screenshots/name.png)`.
+> ![Landing page](./screenshots/landing.png)
+
+![Generated itinerary](./screenshots/itinerary.png)
+
+![Map with day-color-coded pins](./screenshots/map.png)
 
 ## What's actually different from other AI travel tools
 
