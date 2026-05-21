@@ -139,4 +139,6 @@ Open `http://localhost:3000`.
 
 I'm a CS undergrad at BSBI Berlin, building this in the evenings around classes and a part-time bakery job. Trying to learn what it actually takes to ship something real, not just finish coursework.
 
-Reach me: [your email or LinkedIn URL]
+Reach me: aamirabbas858@gmail.com
+LinkedIn url: www.linkedin.com/in/abbas-aamir-474969353
+
