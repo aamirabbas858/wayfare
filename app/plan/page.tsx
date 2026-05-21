@@ -113,14 +113,11 @@ export default function PlanPage() {
     <main className="min-h-screen bg-white dark:bg-black">
       <header className="px-6 py-6 border-b border-neutral-200 dark:border-neutral-900">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-black dark:bg-white flex items-center justify-center">
-              <span className="text-white dark:text-black text-xs font-medium">w</span>
-            </div>
-            <span className="text-sm font-medium tracking-tight text-neutral-600 dark:text-neutral-400">
-              wayfare
-            </span>
-          </Link>
+          <Link href="/" className="inline-flex items-center">
+  <span className="text-base font-medium tracking-tight lowercase text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">
+    wayfare<span className="text-black dark:text-white">.</span>
+  </span>
+</Link>
         </div>
       </header>
 
