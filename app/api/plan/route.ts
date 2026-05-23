@@ -1,11 +1,25 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
+import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 300;
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+
+async function executeSearch(query: string): Promise<string> {
+  try {
+    const results = await tavilyClient.search(query, {
+      maxResults: 3,
+      searchDepth: "basic",
+    });
+    return results.results
+      .map((r) => `${r.title}\n${r.content}`)
+      .join("\n\n");
+  } catch {
+    return `[Search failed for: ${query}]`;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +36,6 @@ export async function POST(request: NextRequest) {
     const days = Math.ceil(
       (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
     );
-
     if (days <= 0) {
       return new Response(
         JSON.stringify({ error: "End date must be after start date." }),
@@ -31,18 +44,37 @@ export async function POST(request: NextRequest) {
     }
 
     const today = new Date().toISOString().split("T")[0];
+    const year = new Date(startDate).getFullYear();
+    const month = new Date(startDate).toLocaleString("default", { month: "long" });
 
-    const prompt = `You are an experienced, honest travel planner who has actually LIVED in ${destination} for years and knows it like a local. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler. Be specific, current, and grounded.
+    // Predefined searches — run in parallel for speed and reliability
+    const searchQueries = [
+      `${origin} to ${destination} flight prices ${month} ${year}`,
+      `${destination} public transport day pass week pass price ${year}`,
+      `${destination} cheap hostels hotels ${month} ${year} prices`,
+      `${destination} top attractions opening hours ticket prices ${year}`,
+    ];
 
-CRITICAL RULES (these prevent you from being useless):
-1. Use REAL current prices from web search. Never write "around" or "approximately".
-2. ACCOUNT FOR SEASONALITY. Hostel and flight prices vary massively by month.
-3. NAME specific places. "Wombat's Hostel near Liverpool Street, £40/night in July" not "a hostel for £20".
-4. BE HONEST ABOUT BUDGET FEASIBILITY. If €X is genuinely too tight, say so in the FIRST sentence.
-5. EXPLAIN LOCAL CONCEPTS visitors won't intuit (tap-in/tap-out, validation rules, queueing norms, tipping etiquette).
-6. INCLUDE A SAFETY SECTION with realistic concerns (pickpocketing hotspots, phone snatching patterns, common scams). Matter-of-fact, never fear-mongering.
+    const searchResults = await Promise.all(
+      searchQueries.map(async (q, i) => {
+        const r = await executeSearch(q);
+        return `### Search ${i + 1}: ${q}\n${r}`;
+      })
+    );
 
-Trip details:
+    const searchContext = searchResults.join("\n\n---\n\n");
+
+    const systemPrompt = `You are an experienced, honest travel planner who has LIVED in ${destination} for years. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler.
+
+CRITICAL RULES:
+1. Use REAL current prices from the search results provided. Never write "around" or "approximately".
+2. Account for SEASONALITY when pricing.
+3. NAME specific places — "Wombat's Hostel near Liverpool Street" not "a hostel".
+4. BE HONEST about budget feasibility. If too tight, say so in the FIRST sentence.
+5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
+6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.`;
+
+    const userPrompt = `Trip details:
 - Traveler departing from: ${origin}
 - Destination: ${destination}
 - Travel dates: ${startDate} to ${endDate} (${days} days)
@@ -50,33 +82,39 @@ Trip details:
 - Total budget: €${budget}
 - What they want: ${interests}
 
-Today's date is ${today}. USE WEB SEARCH to verify CURRENT prices for the SPECIFIC season.
+Today's date: ${today}
 
-Deliver this exact structure:
+I have already researched current information for you. Use the search results below to inform your response.
+
+${searchContext}
+
+---
+
+Now deliver a complete travel plan with this EXACT structure:
 
 ## The Essentials
 3 sentences max. Most important budget reality, one thing to book TODAY, biggest watch-out.
 
 ## Reality check
-Is the budget realistic AT THIS TIME OF YEAR? Current gotchas. If €${budget} genuinely doesn't work, say it directly in the first sentence.
+Is the budget realistic? Current gotchas. If €${budget} doesn't work for ${days} days, say it directly in the first sentence.
 
 ## Book today
-Items to book NOW because prices rise daily.
+Items to book NOW — flights, transit passes, popular reservations.
 
 ## Budget breakdown
-Real numbers based on CURRENT seasonal prices. Lodging, food, transit, activities, buffer. If total exceeds €${budget}, flag "OVER BUDGET BY €X" and suggest cuts.
+Real numbers based on the search results. Lodging, food, transit, activities, buffer. If total exceeds €${budget}, flag "OVER BUDGET BY €X" and suggest cuts.
 
 ## Getting there
-From ${origin} → ${destination}. Cheapest airline + best day of week + current prices + booking site. Airport-to-city transfer.
+From ${origin} → ${destination}. Use flight prices from the searches. Cheapest day, cheapest airline. Airport-to-city transfer with exact transit info.
 
 ## Where to stay
-Skip if user mentions staying with friends/partner. Otherwise 3 NAMED options at different price points with seasonal prices.
+3 NAMED options at different price points using the accommodation search results. Skip if user mentions staying with friends.
 
 ## Local transit
-Exact pass for this trip length. Where to buy. Cost. Validation rules. Fine for not validating. Then 2-3 sentences explaining HOW THE SYSTEM WORKS for someone unfamiliar with it.
+Exact pass for this trip length using prices from the transit search. Where to buy. Validation rules. Fine for not validating. Plus 2-3 sentences on how the system works.
 
 ## Day-by-day plan
-Day 1 = arrival, last day = departure. Account for airport time. For each day, 4-6 stops with: time, place + neighborhood + nearest transit stop, real price, 1-line honest assessment, watch-outs.
+Day 1 = arrival, last day = departure. For each day, 4-6 stops with: time, place + neighborhood + nearest transit stop, real price, 1-line honest assessment, watch-outs.
 
 ## Tourist traps to skip
 Specific places NOT worth it with what to do instead.
@@ -85,68 +123,49 @@ Specific places NOT worth it with what to do instead.
 3-5 named places locals actually eat at. Honest daily food budget. Price ranges.
 
 ## Safety briefing
-Specific examples: pickpocket hotspots, phone snatching patterns, common scams, areas to be cautious at night.
+Real local concerns. Specific pickpocket hotspots, common scams.
 
 ## Local quirks
-3-5 things outsiders DON'T intuit. Escalator side, queueing, tipping, restaurant etiquette.
+3-5 things outsiders DON'T intuit.
 
 ## Practical
 SIM/eSIM, tipping norms, tap water, emergency number, useful local apps.
 
 ## Verify before booking
-3-5 specific claims to double-check before committing money.
+3-5 specific claims to double-check.
 
 ## Map data
-At the very end of your response, include a single JSON code block with ALL the named places (cafes, restaurants, attractions, museums, parks, neighborhoods) you mentioned in the day-by-day plan. Include lat/lng coordinates — use your best estimate based on the location. The user's map depends on this.
-
-Format EXACTLY like this (no other text after it):
+At the very end, output a JSON array of ALL named places. Format EXACTLY like this in a code block:
 
 \`\`\`json
 [
-  {"name": "Bonanza Coffee Heroes", "address": "Oderberger Str. 35", "lat": 52.5398, "lng": 13.4051, "day": 1, "type": "cafe"},
-  {"name": "East Side Gallery", "address": "Mühlenstr. 3-100", "lat": 52.5050, "lng": 13.4395, "day": 1, "type": "attraction"}
+  {"name": "Bonanza Coffee Heroes", "address": "Oderberger Str. 35", "lat": 52.5398, "lng": 13.4051, "day": 1, "type": "cafe"}
 ]
 \`\`\`
 
-Rules for the JSON:
-- Include EVERY place mentioned in the day-by-day plan
-- Use realistic lat/lng (Claude knows coordinates for famous places; for obscure ones, approximate based on the neighborhood)
-- "type" can be: cafe, restaurant, attraction, museum, park, market, bar, transit, hotel, neighborhood
-- "day" matches the day in the itinerary
+Include EVERY named place. Use realistic lat/lng. Type: cafe/restaurant/attraction/museum/park/market/bar/transit/hotel/neighborhood.
 
-FINAL RULES:
-- NEVER write "around" or "approximately" for prices.
-- If touristy AND worth it, say so. If touristy and NOT, say so.
-- For uncertain prices add "(verify current)".
-- No filler, no clichés, no marketing voice. Markdown for the main response.`;
+NEVER write "around" or "approximately" for prices. No filler, no clichés. Markdown only.`;
 
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const messageStream = client.messages.stream({
-            model: "claude-sonnet-4-6",
-            max_tokens: 12000,
-            tools: [
-              {
-                type: "web_search_20250305",
-                name: "web_search",
-                max_uses: 4,
-              },
+          const finalStream = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
             ],
-            messages: [{ role: "user", content: prompt }],
+            stream: true,
+            max_tokens: 8000,
           });
 
-          for await (const event of messageStream) {
-            if (
-              event.type === "content_block_delta" &&
-              event.delta.type === "text_delta"
-            ) {
-              controller.enqueue(encoder.encode(event.delta.text));
-            }
+          for await (const chunk of finalStream) {
+            const text = chunk.choices[0]?.delta?.content || "";
+            if (text) controller.enqueue(encoder.encode(text));
           }
-
           controller.close();
         } catch (err) {
           const message = err instanceof Error ? err.message : "Stream error";
