@@ -8,7 +8,7 @@ A travel planner that gives honest, current advice instead of the generic stuff 
 
 I got annoyed with how every AI travel assistant gives you the same vague recommendations. ChatGPT tells you to "immerse yourself in the local culture" and visit "popular landmarks." It can't tell you what an Oyster card actually costs in London right now, or that the Pergamon Museum in Berlin is half-closed for renovation, or that you'll get your phone snatched if you stand on a Shoreditch curb with it out.
 
-So I built wayfare. It uses Claude with web search to give you:
+So I built wayfare. It uses an LLM with real-time web search to give you:
 
 - Real current prices for flights, hostels, and transit (looked up live, not pulled from training data)
 - Named restaurants and cafes with actual addresses, not "try some local food"
@@ -21,7 +21,7 @@ It's supposed to feel like advice from a friend who actually lives in the city y
 
 ## Screenshots
 
-> ![Landing page](./screenshots/landing.png)
+![Landing page](./screenshots/landing.png)
 
 ![Generated itinerary](./screenshots/itinerary.png)
 
@@ -31,7 +31,7 @@ It's supposed to feel like advice from a friend who actually lives in the city y
 
 I tried Wonderplan, Layla, Mindtrip, and ChatGPT before building this. They all do roughly the same thing: pretty UI wrapped around generic LLM output. Wayfare's differences:
 
-**Web search is forced, not optional.** Every response runs up to 4 live searches to verify prices and conditions. The prompt explicitly bans the model from using vague words like "around" or "approximately" — it has to give real numbers or mark uncertain ones with "(verify current)".
+**Web search is forced, not optional.** Every response runs 4 live searches in parallel to verify prices and conditions before any recommendation is made. The prompt explicitly bans the model from using vague words like "around" or "approximately" — it has to give real numbers or mark uncertain ones with "(verify current)".
 
 **The prompt is hostile to AI clichés.** The system prompt has rules like "never write 'immerse yourself in the vibrant culture'" and "if a place is touristy and not worth it, say so." Most AI tools won't tell you something sucks. Mine will.
 
@@ -45,52 +45,54 @@ I tried Wonderplan, Layla, Mindtrip, and ChatGPT before building this. They all 
 
 - **Next.js 15** with App Router and TypeScript
 - **Tailwind CSS** + **shadcn/ui** for the design system
-- **Anthropic Claude API** (Sonnet 4.6) as the language model
-- **Anthropic's web_search tool** for real-time data
+- **Groq API** running **Llama 3.3 70B** as the language model (free tier)
+- **Tavily Search API** for real-time web search (free tier, 1000 searches/month)
 - **Mapbox GL JS** for the map visualization
 - **Streaming responses** via ReadableStream so output appears as it's generated
 - **Vercel** for hosting, auto-deploys on every git push
 - **GitHub** for version control
 
-There's also an earlier Python + Streamlit prototype in a separate folder that I used to validate the prompt and the approach before building the proper Next.js version.
+There's also an earlier Python + Streamlit prototype I used to validate the prompt and approach before building the proper Next.js version. The first production version actually ran on Anthropic's Claude API — I migrated to Groq + Tavily later for cost reasons (see "Hard parts" below).
 
 ## How it actually works
 
 When you submit the form:
 
 1. The form posts to `/api/plan`, a Next.js API route
-2. The API route builds a detailed prompt with your destination, dates, budget, and interests, plus a long list of rules forcing real prices and honest assessments
-3. It calls Claude with the web_search tool enabled, capped at 4 searches per request
-4. Claude decides what to search (transit prices, current hostel rates, opening hours, etc.) and runs those searches itself
-5. The response streams back token by token via a ReadableStream
-6. The frontend reads the stream and updates the page in real time
-7. At the very end of the response, Claude outputs a JSON block listing every named place with lat/lng coordinates
-8. The frontend parses that JSON, hides it from the visible text, and renders the places as colored pins on a Mapbox map
+2. The route takes your destination, dates, budget, and interests and builds 4 targeted search queries: flights, transit, accommodation, and attractions
+3. All 4 searches run in parallel through Tavily for speed
+4. Search results get packaged into one prompt with strict formatting rules
+5. That prompt goes to Groq running Llama 3.3 70B with streaming enabled
+6. The response streams back token by token via a ReadableStream
+7. The frontend reads the stream and updates the page in real time
+8. At the very end of the response, the model outputs a JSON block listing every named place with lat/lng coordinates
+9. The frontend parses that JSON, hides it from the visible text, and renders the places as colored pins on a Mapbox map
 
-The whole thing runs on Vercel's serverless functions, which have a 60-second timeout on the free tier — handling that was actually one of the harder parts.
+The whole thing runs on Vercel's serverless functions, which have a 60-second timeout on the free tier — manageable because parallel searches finish in 3-5 seconds and Groq streams very fast (~300 tokens/second on Llama 70B).
 
 ## Hard parts I had to figure out
 
-**Vercel's 60-second timeout.** The first deployed version timed out constantly because Claude takes 30-60 seconds to do web searches before any text comes out. The fix was switching to streaming responses — Vercel keeps the function alive as long as data is flowing, even past 60 seconds.
+**Migrating from Anthropic to free APIs.** The first production version used Claude with Anthropic's built-in web_search tool, which cost about €0.20 per trip. That adds up fast when sharing with friends. Migrated to Groq (free Llama 3.3 70B) + Tavily (1000 free searches/month) for €0/month forever. The migration was tricky because Llama's tool calling is unreliable on Groq — it sometimes generates `<function>...</function>` tags instead of the standard JSON format Groq expects, which crashes the parser. Solved by dropping dynamic tool calling entirely and switching to predefined parallel searches based on the form input. Less flexible than Claude's adaptive approach but 100% reliable and noticeably faster.
 
-**Stopping the LLM from leaking JSON into the visible output.** Claude is supposed to put the place-list JSON at the end in a code block, but it sometimes drops the code fences. I ended up writing a parser that finds the JSON by looking for the earliest marker among three options (a `## Map data` heading, a ```` ```json ```` fence, or a raw `[{...` array containing `"lat"`) and cuts everything from that point onward out of the display text.
+**Vercel's 60-second timeout.** Early versions timed out constantly because the LLM takes 30-60 seconds to do searches before any text comes out. Fix was switching to streaming responses — Vercel keeps the function alive as long as data is flowing, even past 60 seconds.
 
-**API key leaks.** Made the classic mistake early on of pasting my Anthropic key into the wrong file. Had to revoke and regenerate. Now I'm religious about `.env.local` and `.gitignore`.
+**Stopping the LLM from leaking JSON into the visible output.** The model is supposed to put the place-list JSON at the end in a code block, but it sometimes drops the code fences. I ended up writing a parser that finds the JSON by looking for the earliest marker among three options (a `## Map data` heading, a triple-backtick json fence, or a raw `[{...` array containing `"lat"`) and cuts everything from that point onward out of the display text.
 
-**Cost management.** Each Claude call with web search costs around €0.15-0.25. Dropped max_uses from 6 to 4 to cut response time and cost without losing the critical searches.
+**API key leaks.** Made the classic mistake early on of pasting an API key directly into a code file. Had to revoke and regenerate. Now I'm religious about `.env.local` and `.gitignore`.
 
-**Map coordinates from an LLM.** Claude knows lat/lng for famous places but approximates for obscure ones. Some pins land a few hundred meters off the real spot. Mapbox geocoding would fix this but adds another API call per place — left it as-is for v1.
+**Map coordinates from an LLM.** The model knows lat/lng for famous places but approximates for obscure ones. Some pins land a few hundred meters off the real spot. Mapbox geocoding would fix this but adds another API call per place — left it as-is for v1.
 
 ## Known limitations
 
 Being honest about what's not great:
 
-- Coordinates from Claude are sometimes slightly off for obscure venues
+- Coordinates from the LLM are sometimes slightly off for obscure venues
 - No saved trips yet — refreshing the page loses your itinerary. localStorage for this is planned
 - English only
-- Response takes 60-90 seconds — cut down from 2+ minutes, but not instant. Anything faster means cutting web search depth
+- Response takes 30-60 seconds — fast streaming after the parallel searches finish
 - Single user, no accounts. Trips aren't saved or shareable
-- Currently runs on my personal Anthropic credits. Migration to Groq + Tavily (free LLM + free search) is the next big task so it can scale without my wallet bleeding
+- Tavily free tier caps at 1000 searches/month (~250 trips). Plenty for personal/portfolio use but would need a paid plan if it ever got popular
+- Llama 3.3 70B is solid but less polished than Claude in nuance and structured output
 
 ## What I actually learned building this
 
@@ -101,13 +103,15 @@ Being honest about what's not great:
 - Why "just use the LLM output directly" doesn't work — you always need a parser
 - How to debug bugs that only happen in production (the worst kind)
 - API key hygiene the hard way
+- Trade-offs between paid LLM providers with built-in tools vs. free providers with manual wiring — and when the migration is worth doing
 
 ## Running it locally
 
 You need:
 
 - Node.js 20 or higher
-- An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
+- A Groq API key from [console.groq.com](https://console.groq.com) (free)
+- A Tavily API key from [tavily.com](https://tavily.com) (free)
 - A Mapbox public token from [account.mapbox.com](https://account.mapbox.com) (free)
 
 ```bash
@@ -119,7 +123,8 @@ npm install
 Create `.env.local` in the project root:
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+GROQ_API_KEY=gsk_...
+TAVILY_API_KEY=tvly-...
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
 ```
 
@@ -133,7 +138,6 @@ Open `http://localhost:3000`.
 
 ## What's next
 
-- Migrate from Anthropic to Groq (Llama 3.3 70B) + Tavily so the API is free
 - localStorage to remember recent trips
 - Custom domain
 - Maybe a Supabase database for shareable, persistent trips
@@ -143,6 +147,4 @@ Open `http://localhost:3000`.
 
 I'm a CS undergrad at BSBI Berlin, building this in the evenings around classes and a part-time bakery job. Trying to learn what it actually takes to ship something real, not just finish coursework.
 
-Reach me: aamirabbas858@gmail.com
-LinkedIn url: www.linkedin.com/in/abbas-aamir-474969353
-
+Reach me: [your email or LinkedIn URL]
