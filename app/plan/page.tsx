@@ -50,14 +50,6 @@ export default function PlanPage() {
     return { places: parsedPlaces, cleanedItinerary: cleaned };
   }, [itinerary]);
 
-  // DEBUG LOGGING — remove later
-  useEffect(() => {
-    if (itinerary && !loading) {
-      console.log("=== RAW ITINERARY (last 2000 chars) ===");
-      console.log(itinerary.slice(-2000));
-      console.log("=== PLACES PARSED ===", places);
-    }
-  }, [itinerary, loading, places]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
