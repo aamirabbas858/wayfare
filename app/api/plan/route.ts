@@ -1,10 +1,10 @@
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 300;
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
 
 async function executeSearch(query: string): Promise<string> {
@@ -170,18 +170,15 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const finalStream = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            stream: true,
-            max_tokens: 6500,
+          const geminiModel = genAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+            systemInstruction: systemPrompt,
           });
 
-          for await (const chunk of finalStream) {
-            const text = chunk.choices[0]?.delta?.content || "";
+          const result = await geminiModel.generateContentStream(userPrompt);
+
+          for await (const chunk of result.stream) {
+            const text = chunk.text();
             if (text) controller.enqueue(encoder.encode(text));
           }
           controller.close();
