@@ -163,7 +163,7 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
               { role: "user", content: userPrompt },
             ],
             stream: true,
-            max_tokens: 8000,
+            max_tokens: 6500,
           });
 
           for await (const chunk of finalStream) {
