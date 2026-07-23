@@ -45,14 +45,14 @@ I tried Wonderplan, Layla, Mindtrip, and ChatGPT before building this. They all 
 
 - **Next.js 15** with App Router and TypeScript
 - **Tailwind CSS** + **shadcn/ui** for the design system
-- **Groq API** running **Llama 3.3 70B** as the language model (free tier)
+- **Google Gemini API** (gemini-3.5-flash) as the language model (free tier)
 - **Tavily Search API** for real-time web search (free tier, 1000 searches/month)
 - **Mapbox GL JS** for the map visualization
 - **Streaming responses** via ReadableStream so output appears as it's generated
 - **Vercel** for hosting, auto-deploys on every git push
 - **GitHub** for version control
 
-There's also an earlier Python + Streamlit prototype I used to validate the prompt and approach before building the proper Next.js version. The first production version actually ran on Anthropic's Claude API — I migrated to Groq + Tavily later for cost reasons (see "Hard parts" below).
+There's also an earlier Python + Streamlit prototype I used to validate the prompt and approach before building the proper Next.js version. The first production version actually ran on Anthropic's Claude API, then Groq + Llama 3.3 70B, before settling on Gemini + Tavily for the best free tier limits.
 
 ## How it actually works
 
@@ -62,17 +62,17 @@ When you submit the form:
 2. The route takes your destination, dates, budget, and interests and builds 4 targeted search queries: flights, transit, accommodation, and attractions
 3. All 4 searches run in parallel through Tavily for speed
 4. Search results get packaged into one prompt with strict formatting rules
-5. That prompt goes to Groq running Llama 3.3 70B with streaming enabled
+5. That prompt goes to the Gemini API with streaming enabled
 6. The response streams back token by token via a ReadableStream
 7. The frontend reads the stream and updates the page in real time
 8. At the very end of the response, the model outputs a JSON block listing every named place with lat/lng coordinates
 9. The frontend parses that JSON, hides it from the visible text, and renders the places as colored pins on a Mapbox map
 
-The whole thing runs on Vercel's serverless functions, which have a 60-second timeout on the free tier — manageable because parallel searches finish in 3-5 seconds and Groq streams very fast (~300 tokens/second on Llama 70B).
+The whole thing runs on Vercel's serverless functions, which have a 60-second timeout on the free tier — manageable because parallel searches finish in 3-5 seconds and Gemini streams fast and handles long structured prompts reliably.
 
 ## Hard parts I had to figure out
 
-**Migrating from Anthropic to free APIs.** The first production version used Claude with Anthropic's built-in web_search tool, which cost about €0.20 per trip. That adds up fast when sharing with friends. Migrated to Groq (free Llama 3.3 70B) + Tavily (1000 free searches/month) for €0/month forever. The migration was tricky because Llama's tool calling is unreliable on Groq — it sometimes generates `<function>...</function>` tags instead of the standard JSON format Groq expects, which crashes the parser. Solved by dropping dynamic tool calling entirely and switching to predefined parallel searches based on the form input. Less flexible than Claude's adaptive approach but 100% reliable and noticeably faster.
+**Migrating from Anthropic to free APIs.** The first production version used Claude with Anthropic's built-in web_search tool, which cost about €0.20 per trip. That adds up fast when sharing with friends. Migrated to Gemini 2.0 Flash (free tier) + Tavily (1000 free searches/month) for €0/month on normal usage. Switched from SDK-based calls to direct REST fetch to avoid auth issues with newer API key formats. Added a model fallback list so the app automatically tries the next model if one is overloaded.
 
 **Vercel's 60-second timeout.** Early versions timed out constantly because the LLM takes 30-60 seconds to do searches before any text comes out. Fix was switching to streaming responses — Vercel keeps the function alive as long as data is flowing, even past 60 seconds.
 
@@ -91,8 +91,8 @@ Being honest about what's not great:
 - English only
 - Response takes 30-60 seconds — fast streaming after the parallel searches finish
 - Single user, no accounts. Trips aren't saved or shareable
-- Tavily free tier caps at 1000 searches/month (~250 trips). Plenty for personal/portfolio use but would need a paid plan if it ever got popular
-- Llama 3.3 70B is solid but less polished than Claude in nuance and structured output
+- Tavily free tier caps at 1000 searches/month (~250 trips). Plenty for portfolio use
+- Response quality is good but occasionally misses nuance on obscure destinations
 
 ## What I actually learned building this
 
@@ -110,7 +110,7 @@ Being honest about what's not great:
 You need:
 
 - Node.js 20 or higher
-- A Groq API key from [console.groq.com](https://console.groq.com) (free)
+- A Gemini API key from [aistudio.google.com](https://aistudio.google.com) (free)
 - A Tavily API key from [tavily.com](https://tavily.com) (free)
 - A Mapbox public token from [account.mapbox.com](https://account.mapbox.com) (free)
 
@@ -123,7 +123,7 @@ npm install
 Create `.env.local` in the project root:
 
 ```
-GROQ_API_KEY=gsk_...
+GEMINI_API_KEY=AQ...
 TAVILY_API_KEY=tvly-...
 NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
 ```
@@ -148,4 +148,4 @@ Open `http://localhost:3000`.
 I'm a CS undergrad at BSBI Berlin, building this in the evenings around classes and a part-time bakery job. Trying to learn what it actually takes to ship something real, not just finish coursework.
 
 Reach me: aamirabbas858@gmail.com
-LinkedIn URL: www.linkedin.com/in/abbas-aamir-474969353
+LinkedIn: https://www.linkedin.com/in/abbas-aamir-474969353
