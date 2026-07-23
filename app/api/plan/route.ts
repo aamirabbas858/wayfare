@@ -98,10 +98,12 @@ ${searchContext}
 Now deliver a complete travel plan with this EXACT structure:
 
 ## The Essentials
-3 sentences exactly: (1) State daily per-person budget as a fact: "€${dailyPerPerson}/day per person for ${days} days in ${destination}" — nothing else, no verdict; (2) the single most time-sensitive thing to book TODAY with a reason; (3) the single most important local watch-out (not budget-related — save budget for the Reality check).
+3 sentences, no budget discussion: (1) The single most time-sensitive booking for this specific trip and exactly why it needs to go TODAY; (2) the single most important local rule or watch-out in ${destination} that catches first-time visitors off guard; (3) one practical tip specific to ${destination} that guidebooks don't mention.
 
 ## Reality check
-Per-person daily budget: €${dailyPerPerson}/day (€${budget} ÷ ${numTravelers} traveler(s) ÷ ${days} days). Name one current gotcha specific to ${destination} right now — a price spike, a closure, a seasonal factor — backed by the search results. One sentence only. Save the budget verdict for the Budget breakdown where you have the full numbers.
+Show the arithmetic on one line, then give the verdict:
+"€${dailyPerPerson}/day per person. Cheapest viable day in ${destination}: hostel €[X]/night + street food €[Y]/day + transit €[Z]/day = €[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
+Then one sentence: the single most important current gotcha for ${destination} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
 Items to book NOW — flights, transit passes, popular reservations.
