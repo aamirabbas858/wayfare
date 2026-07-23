@@ -76,7 +76,8 @@ CRITICAL RULES:
 3. NAME specific places — "Wombat's Hostel near Liverpool Street" not "a hostel".
 4. ASSESS budget with honest arithmetic. Per-person daily budget = total ÷ travelers ÷ days. Compare against real costs in the search results. If the math works, say it works — clearly and without hedging. Only flag a budget as tight if the numbers genuinely do not add up. Never manufacture concern, and never say something is fine when it clearly is not.
 5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
-6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.`;
+6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.
+7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost €5-15/day in cheap cities and €15-25/day in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.`;
 
     const userPrompt = `Trip details:
 - Traveler departing from: ${origin}
@@ -96,12 +97,16 @@ ${searchContext}
 
 Before writing any section, complete this budget pre-check silently:
 DAILY_PER_PERSON = €${dailyPerPerson}
-Using only the search results, estimate the cheapest realistic daily cost in ${destination}:
-  cheapest hostel or budget hotel (÷ nights) + street food budget + transit pass (÷ days)
-Compare DAILY_PER_PERSON to that estimate.
-  • DAILY_PER_PERSON clearly covers it with money left → verdict = COMFORTABLE or GENEROUS
-  • DAILY_PER_PERSON barely covers it or falls short → verdict = TIGHT
-Lock in this verdict. Every section must reflect it consistently — never contradict it.
+Estimate the CHEAPEST realistic daily spend for a budget traveler in ${destination}:
+  A = cheapest hostel bed from search results ÷ 1 night
+  B = street food / local lunch menu / supermarket meals — NOT tourist restaurant menus (€5-15 in cheap cities, €15-25 in expensive ones)
+  C = cheapest transit pass ÷ days
+  CHEAPEST_DAILY = A + B + C
+Then:
+  • If DAILY_PER_PERSON ≥ CHEAPEST_DAILY × 1.4 → verdict = COMFORTABLE (budget covers costs with clear room to spare)
+  • If DAILY_PER_PERSON ≥ CHEAPEST_DAILY × 1.0 → verdict = TIGHT (covers minimum but no margin)
+  • If DAILY_PER_PERSON < CHEAPEST_DAILY → verdict = OVER BUDGET (doesn't even cover minimum)
+Lock in this verdict. Write every section consistent with it. Do not contradict it anywhere.
 
 Now deliver a complete travel plan with this EXACT structure:
 
