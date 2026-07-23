@@ -47,12 +47,16 @@ export async function POST(request: NextRequest) {
     const year = new Date(startDate).getFullYear();
     const month = new Date(startDate).toLocaleString("default", { month: "long" });
 
+    const numTravelers = parseInt(travelers || "1");
+    const dailyPerPerson = Math.round(parseInt(budget) / numTravelers / days);
+
     // Predefined searches — run in parallel for speed and reliability
+    const travelerSuffix = numTravelers > 1 ? ` for ${numTravelers} people` : "";
     const searchQueries = [
-      `${origin} to ${destination} flight prices ${month} ${year}`,
+      `${origin} to ${destination} flights ${month} ${year}${numTravelers > 1 ? ` ${numTravelers} passengers` : ""}`,
       `${destination} public transport day pass week pass price ${year}`,
-      `${destination} cheap hostels hotels ${month} ${year} prices`,
-      `${destination} top attractions opening hours ticket prices ${year}`,
+      `${destination} budget accommodation hostels hotels ${month} ${year} prices${travelerSuffix}`,
+      `${destination} top attractions entrance fees opening hours ${year}`,
     ];
 
     const searchResults = await Promise.all(
@@ -70,7 +74,7 @@ CRITICAL RULES:
 1. Use REAL current prices from the search results provided. Never write "around" or "approximately".
 2. Account for SEASONALITY when pricing.
 3. NAME specific places — "Wombat's Hostel near Liverpool Street" not "a hostel".
-4. BE HONEST about budget feasibility. If too tight, say so in the FIRST sentence.
+4. ASSESS budget with honest arithmetic. Per-person daily budget = total ÷ travelers ÷ days. Compare against real costs in the search results. If the math works, say it works — clearly and without hedging. Only flag a budget as tight if the numbers genuinely do not add up. Never manufacture concern, and never say something is fine when it clearly is not.
 5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
 6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.`;
 
@@ -96,13 +100,13 @@ Now deliver a complete travel plan with this EXACT structure:
 3 sentences max. Most important budget reality, one thing to book TODAY, biggest watch-out.
 
 ## Reality check
-Is the budget realistic? Current gotchas. If €${budget} doesn't work for ${days} days, say it directly in the first sentence.
+Per-person daily budget: €${dailyPerPerson}/day (€${budget} total ÷ ${numTravelers} traveler(s) ÷ ${days} days). Using the search results above, give a direct one-sentence verdict: is this tight, comfortable, or generous for ${destination}? Back it up with one real number from the searches. If the budget is fine, say it is fine — do not hedge. Only raise concern if the arithmetic genuinely breaks.
 
 ## Book today
 Items to book NOW — flights, transit passes, popular reservations.
 
 ## Budget breakdown
-Real numbers based on the search results. Lodging, food, transit, activities, buffer. If total exceeds €${budget}, flag "OVER BUDGET BY €X" and suggest cuts.
+Show per-person costs: lodging, food, transit, activities, buffer — all in real numbers from the search results. Then show the total and compare to €${budget}. If over budget, flag "OVER BUDGET BY €X" and suggest specific cuts. If under budget, show the surplus and call it a comfortable trip.
 
 ## Getting there
 From ${origin} → ${destination}. Use flight prices from the searches. Cheapest day, cheapest airline. Airport-to-city transfer with exact transit info.
