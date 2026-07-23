@@ -1,10 +1,8 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 300;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
 
 async function executeSearch(query: string): Promise<string> {
@@ -170,16 +168,44 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const geminiModel = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            systemInstruction: systemPrompt,
-          });
+          const models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+          let geminiResp: Response | null = null;
+          for (const model of models) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`;
+            const resp = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              }),
+            });
+            if (resp.ok) { geminiResp = resp; break; }
+            if (resp.status !== 503) {
+              throw new Error(`Gemini ${resp.status}: ${await resp.text()}`);
+            }
+          }
+          if (!geminiResp) throw new Error("All Gemini models temporarily unavailable. Please try again in a moment.");
 
-          const result = await geminiModel.generateContentStream(userPrompt);
-
-          for await (const chunk of result.stream) {
-            const text = chunk.text();
-            if (text) controller.enqueue(encoder.encode(text));
+          const reader = geminiResp.body!.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() || "";
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const json = line.slice(6).trim();
+              if (!json || json === "[DONE]") continue;
+              try {
+                const data = JSON.parse(json);
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) controller.enqueue(encoder.encode(text));
+              } catch {}
+            }
           }
           controller.close();
         } catch (err) {
