@@ -94,10 +94,19 @@ ${searchContext}
 
 ---
 
+Before writing any section, complete this budget pre-check silently:
+DAILY_PER_PERSON = €${dailyPerPerson}
+Using only the search results, estimate the cheapest realistic daily cost in ${destination}:
+  cheapest hostel or budget hotel (÷ nights) + street food budget + transit pass (÷ days)
+Compare DAILY_PER_PERSON to that estimate.
+  • DAILY_PER_PERSON clearly covers it with money left → verdict = COMFORTABLE or GENEROUS
+  • DAILY_PER_PERSON barely covers it or falls short → verdict = TIGHT
+Lock in this verdict. Every section must reflect it consistently — never contradict it.
+
 Now deliver a complete travel plan with this EXACT structure:
 
 ## The Essentials
-3 sentences max. Most important budget reality, one thing to book TODAY, biggest watch-out.
+3 sentences exactly: (1) Budget verdict in plain English — use the pre-check result, state it directly with no hedging ("This budget is comfortable", "This budget is tight", "This budget is generous"); (2) one thing to book TODAY; (3) biggest practical watch-out that is NOT about budget.
 
 ## Reality check
 Per-person daily budget: €${dailyPerPerson}/day (€${budget} total ÷ ${numTravelers} traveler(s) ÷ ${days} days). Using the search results above, give a direct one-sentence verdict: is this tight, comfortable, or generous for ${destination}? Back it up with one real number from the searches. If the budget is fine, say it is fine — do not hedge. Only raise concern if the arithmetic genuinely breaks.
