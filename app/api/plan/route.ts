@@ -95,32 +95,30 @@ ${searchContext}
 
 ---
 
-Before writing any section, complete this budget pre-check silently:
-DAILY_PER_PERSON = €${dailyPerPerson}
-Estimate the CHEAPEST realistic daily spend for a budget traveler in ${destination}:
-  A = cheapest hostel bed from search results ÷ 1 night
-  B = street food / local lunch menu / supermarket meals — NOT tourist restaurant menus (€5-15 in cheap cities, €15-25 in expensive ones)
-  C = cheapest transit pass ÷ days
-  CHEAPEST_DAILY = A + B + C
-Then:
-  • If DAILY_PER_PERSON ≥ CHEAPEST_DAILY × 1.4 → verdict = COMFORTABLE (budget covers costs with clear room to spare)
-  • If DAILY_PER_PERSON ≥ CHEAPEST_DAILY × 1.0 → verdict = TIGHT (covers minimum but no margin)
-  • If DAILY_PER_PERSON < CHEAPEST_DAILY → verdict = OVER BUDGET (doesn't even cover minimum)
-Lock in this verdict. Write every section consistent with it. Do not contradict it anywhere.
-
 Now deliver a complete travel plan with this EXACT structure:
 
 ## The Essentials
-3 sentences exactly: (1) Budget verdict in plain English — use the pre-check result, state it directly with no hedging ("This budget is comfortable", "This budget is tight", "This budget is generous"); (2) one thing to book TODAY; (3) biggest practical watch-out that is NOT about budget.
+3 sentences exactly: (1) State daily per-person budget as a fact: "€${dailyPerPerson}/day per person for ${days} days in ${destination}" — nothing else, no verdict; (2) the single most time-sensitive thing to book TODAY with a reason; (3) the single most important local watch-out (not budget-related — save budget for the Reality check).
 
 ## Reality check
-Per-person daily budget: €${dailyPerPerson}/day (€${budget} total ÷ ${numTravelers} traveler(s) ÷ ${days} days). Using the search results above, give a direct one-sentence verdict: is this tight, comfortable, or generous for ${destination}? Back it up with one real number from the searches. If the budget is fine, say it is fine — do not hedge. Only raise concern if the arithmetic genuinely breaks.
+Per-person daily budget: €${dailyPerPerson}/day (€${budget} ÷ ${numTravelers} traveler(s) ÷ ${days} days). Name one current gotcha specific to ${destination} right now — a price spike, a closure, a seasonal factor — backed by the search results. One sentence only. Save the budget verdict for the Budget breakdown where you have the full numbers.
 
 ## Book today
 Items to book NOW — flights, transit passes, popular reservations.
 
 ## Budget breakdown
-Show per-person costs: lodging, food, transit, activities, buffer — all in real numbers from the search results. Then show the total and compare to €${budget}. If over budget, flag "OVER BUDGET BY €X" and suggest specific cuts. If under budget, show the surplus and call it a comfortable trip.
+Line-by-line per-person costs using the cheapest realistic options from search results:
+  - Flights (cheapest found)
+  - Lodging: cheapest hostel/hotel per night × ${days} nights
+  - Food: local market lunch + street food estimate per day × ${days} days (NOT tourist restaurant prices)
+  - Transit: cheapest pass for this trip length
+  - Activities: named places with real entrance fees
+  - Buffer: 10% of subtotal
+Show running total. Then one of:
+  • If total < €${budget} × 0.85 → "BUDGET VERDICT: Comfortable — €X surplus, no stress needed."
+  • If total < €${budget} → "BUDGET VERDICT: Workable — €X surplus, keep an eye on food spend."
+  • If total > €${budget} → "BUDGET VERDICT: Over budget by €X — suggest [specific cut]."
+The verdict lives here, not in The Essentials.
 
 ## Getting there
 From ${origin} → ${destination}. Use flight prices from the searches. Cheapest day, cheapest airline. Airport-to-city transfer with exact transit info.
