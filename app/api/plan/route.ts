@@ -1,6 +1,32 @@
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
-import { generateStream, hasProvider } from "@/lib/llm";
+import { generateStream, hasProvider, providerStatus } from "@/lib/llm";
+
+/**
+ * Health check. Reports which providers the running deployment can see, and
+ * whether the search key is present — booleans and key lengths only, never a
+ * key or any fragment of one.
+ *
+ * This exists because Vercel bakes environment variables in at build time,
+ * so "I added the variable" and "the deployment has it" are different
+ * claims. Safe to delete once configuration has settled.
+ */
+export async function GET() {
+  return Response.json(
+    {
+      ok: hasProvider(),
+      providers: providerStatus(),
+      search: {
+        envVar: "TAVILY_API_KEY",
+        configured: Boolean(process.env.TAVILY_API_KEY),
+      },
+      hint: hasProvider()
+        ? "At least one provider is configured."
+        : "No provider key reached this build. In Vercel, confirm the variable is enabled for Production, then redeploy — env vars only apply to new builds.",
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+}
 
 export const maxDuration = 300;
 

@@ -254,3 +254,28 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 export function hasProvider(): boolean {
   return PROVIDERS.some((p) => p.enabled());
 }
+
+/**
+ * Which providers the running server can actually see, as booleans.
+ *
+ * Deliberately reports only presence and key length — never a key, or any
+ * part of one. Environment variables are baked in at build time on Vercel,
+ * so "I added the variable" and "the running deployment has it" are
+ * different claims, and this is the only way to tell them apart from
+ * outside.
+ */
+export function providerStatus() {
+  return PROVIDERS.map((p) => {
+    const envVar = `${p.name.toUpperCase()}_API_KEY`;
+    const raw = process.env[envVar];
+    return {
+      provider: p.name,
+      envVar,
+      configured: p.enabled(),
+      // A length of 0 with configured:false means the variable is missing.
+      // A short length usually means a truncated paste.
+      keyLength: raw ? raw.length : 0,
+      models: p.models,
+    };
+  });
+}
