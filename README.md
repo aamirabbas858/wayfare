@@ -44,16 +44,30 @@ travel brochure.
 
 ## Engineering decisions worth defending
 
-### Three LLM providers, because one is a single point of failure
+### Five LLM providers, because one is a single point of failure
 
 This project migrated Claude → Groq → Gemini, and every migration happened
 because a quota ran out mid-use. The cause was never the provider; it was
 having exactly one.
 
-`lib/llm.ts` tries each configured provider in turn — Groq, then Gemini, then
-OpenRouter — skipping any whose key is absent. Adding redundancy is an
-environment variable, not a code change. Free tiers come first so paid credit
-is spent only once they are exhausted.
+`lib/llm.ts` tries each configured provider in turn — Mistral, NVIDIA NIM,
+Groq, OpenRouter, Gemini — skipping any whose key is absent. Adding redundancy
+is an environment variable, not a code change.
+
+The order is measured rather than assumed. Groq's free tier turned out to be
+**100,000 tokens per day** — roughly eight itineraries shared between every
+visitor — so it can no longer lead despite being the fastest. Mistral's free
+tier is metered monthly and is around three orders of magnitude larger;
+NVIDIA meters requests per minute with no published daily token cap. Providers
+that can absorb a bad afternoon go first.
+
+It also distinguishes the two things a `429` can mean. A per-minute limit
+clears on its own and is worth waiting out; a depleted balance never does.
+Production logs showed the earlier code asking Gemini's three models twice
+each, on every pass, after Gemini had already replied that its balance was
+empty. It now reads the wait time — from the header, or from Groq's prose
+`try again in 31m14s` — and skips the whole provider when the wait is
+unusable, since all its models draw on the same allowance.
 
 Failover happens **only before the first token**. Once a provider starts
 writing we stay with it: switching mid-document would splice half a Gemini
@@ -149,7 +163,8 @@ freezing old ones in an old format.
 ## Stack
 
 Next.js 16 · TypeScript · Tailwind v4 · Neon Postgres + Drizzle ·
-Auth.js v5 · Groq / Gemini / OpenRouter · Tavily · Mapbox · Vercel
+Auth.js v5 · Mistral / NVIDIA NIM / Groq / OpenRouter / Gemini ·
+Tavily · Mapbox · Vercel
 
 Motion is CSS and Canvas only — no animation library, which is ~40 kB for what
 transforms already do at 60fps.
@@ -170,7 +185,7 @@ Only two variables are needed to plan trips. Everything else is optional.
 
 | Variable | Needed for |
 |---|---|
-| `GROQ_API_KEY` *(or `GEMINI_API_KEY`, `OPENROUTER_API_KEY`)* | generating itineraries |
+| any one of `MISTRAL_API_KEY`, `NVIDIA_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` | generating itineraries |
 | `TAVILY_API_KEY` | live price research |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | the map |
 | `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | accounts and saving |

@@ -6,7 +6,19 @@ import { ratesFor, conversionNote } from "@/lib/fx";
 
 export const maxDuration = 300;
 
-const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+// Built on first use rather than at import. The Tavily constructor throws when
+// the key is missing, and at module scope that throw happens while Next is
+// collecting page data — so one absent environment variable fails the whole
+// production build rather than the one route that needs it. The same reasoning
+// already applies to DATABASE_URL: a missing key should degrade a feature, not
+// take the site down.
+let tavilyClient: ReturnType<typeof tavily> | null = null;
+
+function getTavily() {
+  if (!process.env.TAVILY_API_KEY) return null;
+  tavilyClient ??= tavily({ apiKey: process.env.TAVILY_API_KEY });
+  return tavilyClient;
+}
 
 // Search results are the bulk of the prompt, and free-tier providers reject
 // oversized requests outright with HTTP 413. Capping per result and per search
@@ -20,8 +32,10 @@ function clip(text: string, limit: number): string {
 }
 
 async function executeSearch(query: string): Promise<string> {
+  const client = getTavily();
+  if (!client) return `[Search unavailable for: ${query}]`;
   try {
-    const results = await tavilyClient.search(query, {
+    const results = await client.search(query, {
       maxResults: 3,
       searchDepth: "basic",
     });
@@ -42,7 +56,7 @@ export async function POST(request: NextRequest) {
       return new Response(
         JSON.stringify({
           error:
-            "No planning provider is configured. Set GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY.",
+            "No planning provider is configured. Set any one of MISTRAL_API_KEY, NVIDIA_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY or GEMINI_API_KEY.",
         }),
         { status: 503, headers: { "Content-Type": "application/json" } }
       );
@@ -170,11 +184,28 @@ Researched information:
 
 ${placesContext}`;
 
-    const partOne = `${overviewContext}
+    // Short trips are written in one request rather than three.
+    //
+    // Every pass resends the system prompt and its share of the research —
+    // roughly 3,000 tokens of overhead each. For a two-day trip that overhead
+    // is paid three times to produce a document that fits in one completion,
+    // and Groq's free tier is 100,000 tokens per DAY, so the waste is the
+    // difference between the site working and returning half an itinerary.
+    // Splitting also introduces the failure it was meant to prevent: pass one
+    // succeeds, the daily allowance runs out, and the reader gets an overview
+    // with no days attached.
+    //
+    // Five days is the ceiling because the summed budgets below (3000 + 2100
+    // + 2400) still fit inside the 8192-token completion cap. Longer trips
+    // genuinely need the split.
+    const SINGLE_PASS_MAX_DAYS = 5;
+    const multiPass = days > SINGLE_PASS_MAX_DAYS;
 
----
-
-Write these sections and stop. Do not write the day-by-day plan yet.
+    const overviewSections = `${
+      multiPass
+        ? "Write these sections and stop. Do not write the day-by-day plan yet."
+        : "Write every section below, in the order given. Keep going to the end — the day-by-day plan and the closing sections are part of the same document."
+    }
 
 ## The Essentials
 Three short paragraphs, no budget talk. Each must contain a fact that appears in the search results above or a detail true only of ${dest} — a named operator, a specific street, a real amount, a date.
@@ -223,9 +254,13 @@ A markdown list, one bullet per point. Never a paragraph.
 - How validation works here, or state plainly that it could not be confirmed
 - The actual fine for travelling without a valid ticket, in the local currency
 - One thing about the system that catches visitors out
+${multiPass ? '\n\nStop after "Local transit". Do not continue past it.' : ""}`;
 
+    const partOne = `${overviewContext}
 
-Stop after "Local transit". Do not continue past it.`;
+---
+
+${overviewSections}`;
 
     // A 14-day itinerary at four stops a day does not fit in one completion,
     // and the failure is silent — the model stops and the reader thinks the
@@ -250,11 +285,9 @@ Stop after "Local transit". Do not continue past it.`;
     // readable and affordable rather than being cut off half way.
     const stopsPerDay = days <= 5 ? "4-6" : days <= 10 ? "3-5" : "3-4";
 
-    const dayParts = dayBlocks.map(([from, to], i) => `${dayContext}
-
----
-
-Write ONLY days ${from} to ${to} of this ${days}-day trip. ${
+    const daySections = (from: number, to: number, i: number) => `${
+      multiPass ? `Write ONLY days ${from} to ${to} of this ${days}-day trip. ` : ""
+    }${
       i === 0
         ? "Day 1 is arrival, so plan around the arrival time rather than a full day."
         : "These are middle days; assume the traveller is already there and settled."
@@ -268,13 +301,19 @@ time — place name + neighbourhood (nearest transit stop). Real price. One hone
 ### Day ${from}
 - 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). €2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
 
-Keep every stop inside days ${from}-${to}. Do not write any other section. Do not summarise.`);
+Keep every stop inside days ${from}-${to}.${
+      multiPass ? " Do not write any other section. Do not summarise." : ""
+    }`;
 
-    const partThree = `${closingContext}
+    const dayParts = dayBlocks.map(
+      ([from, to], i) => `${dayContext}\n\n---\n\n${daySections(from, to, i)}`
+    );
 
----
-
-The itinerary above has already covered the essentials, budget, transport, lodging and all ${days} days. Write ONLY these closing sections:
+    const closingSections = `${
+      multiPass
+        ? `The itinerary above has already covered the essentials, budget, transport, lodging and all ${days} days. Write ONLY these closing sections:`
+        : "Then continue straight on with these closing sections:"
+    }
 
 ## Tourist traps to skip
 Specific places NOT worth it with what to do instead.
@@ -307,6 +346,8 @@ Real coordinates. day must be between 1 and ${days}. Type: cafe/restaurant/attra
 
 NEVER write "around" or "approximately" for prices. No filler, no clichés. Markdown only.`;
 
+    const partThree = `${closingContext}\n\n---\n\n${closingSections}`;
+
     // One pass for the overview, one per block of days, one for the closing
     // sections. Each falls through Groq → Gemini → OpenRouter independently,
     // so an exhausted quota part-way still leaves the earlier passes intact.
@@ -320,11 +361,29 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
     const dayBudget = ([from, to]: [number, number]) =>
       Math.min(6000, 400 + daysInBlock(from, to) * (days <= 5 ? 340 : 260));
 
-    const passes: Array<{ user: string; maxTokens: number }> = [
-      { user: partOne, maxTokens: 3000 },
-      ...dayParts.map((user, i) => ({ user, maxTokens: dayBudget(dayBlocks[i]) })),
-      { user: partThree, maxTokens: 2400 },
-    ];
+    const passes: Array<{ user: string; maxTokens: number }> = multiPass
+      ? [
+          { user: partOne, maxTokens: 3000 },
+          ...dayParts.map((user, i) => ({ user, maxTokens: dayBudget(dayBlocks[i]) })),
+          { user: partThree, maxTokens: 2400 },
+        ]
+      : [
+          {
+            // One request, one context. overviewContext carries all four
+            // searches, so the day and closing sections lose nothing by not
+            // being sent their own copies — they were subsets of it anyway.
+            user: `${overviewContext}
+
+---
+
+${overviewSections}
+
+${daySections(1, days, 0)}
+
+${closingSections}`,
+            maxTokens: Math.min(8000, 3000 + dayBudget([1, days]) + 2400),
+          },
+        ];
 
     const stream = generateSequence(
       passes.map(({ user, maxTokens }) => ({
