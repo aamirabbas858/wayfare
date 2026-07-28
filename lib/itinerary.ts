@@ -37,34 +37,76 @@ export function splitMapData(markdown: string): SplitItinerary {
 
   const fenced = tail.match(/```json\s*([\s\S]+?)```/);
   const bare = tail.match(/(\[\s*\{[\s\S]*"lat"[\s\S]*\}\s*\])/);
-  const json = fenced?.[1] ?? bare?.[1];
+  // Neither pattern matches a half-written array, so fall back to whatever
+  // follows the opening bracket and let the object scan below salvage it.
+  const json = fenced?.[1] ?? bare?.[1] ?? tail.slice(tail.indexOf("["));
 
-  let places: Place[] = [];
-  if (json) {
-    try {
-      const p: unknown = JSON.parse(json);
-      if (Array.isArray(p)) {
-        places = p
-          .filter(
-            (x) =>
-              !!x && Number.isFinite(Number(x.lat)) && Number.isFinite(Number(x.lng))
-          )
-          // `day` drives the marker colour and the legend. A place that
-          // arrives without one used to pass through as undefined and break
-          // colouring quietly; it falls back to day 1 instead, because
-          // dropping a place the itinerary names is the worse failure.
-          .map((x) => ({
-            ...x,
-            lat: Number(x.lat),
-            lng: Number(x.lng),
-            day: Number.isFinite(Number(x.day)) ? Number(x.day) : 1,
-          }));
+  return { prose, places: readPlaces(json) };
+}
+
+/**
+ * Reads places out of a JSON array that may not be complete.
+ *
+ * A 12-day itinerary lists enough places that the closing pass can run out of
+ * completion budget part-way through the array, leaving it ending on
+ * `{"name":`. `JSON.parse` rejects the whole thing, and the result was a long
+ * trip silently getting no map at all — every pin lost because the last one
+ * was cut in half.
+ *
+ * So the array is parsed whole when it can be, and scanned object by object
+ * when it cannot. Twenty-nine complete places and one truncated one should
+ * yield twenty-nine pins.
+ */
+function readPlaces(json: string): Place[] {
+  if (!json?.trim()) return [];
+
+  let raw: unknown[] = [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (Array.isArray(parsed)) raw = parsed;
+  } catch {
+    // Depth-aware scan: addresses contain commas and braces do not nest here,
+    // but a naive split on "}," would still break on escaped quotes.
+    for (const m of json.matchAll(/\{[^{}]*\}/g)) {
+      try {
+        raw.push(JSON.parse(m[0]));
+      } catch {
+        /* one malformed entry should not cost the others */
       }
-    } catch {
-      /* Still streaming, or the model produced invalid JSON. The prose is the
-         product and the map is an enhancement, so failing here is quiet. */
     }
   }
 
-  return { prose, places };
+  const seen = new Set<string>();
+  const out: Place[] = [];
+
+  for (const x of raw) {
+    const p = x as Record<string, unknown>;
+    const lat = Number(p?.lat);
+    const lng = Number(p?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+    const name = String(p.name ?? "").trim();
+    if (!name) continue;
+
+    // The model repeats a place when it appears on more than one day. Two
+    // markers at identical coordinates just stack on the map.
+    const key = `${name.toLowerCase()}|${lat.toFixed(4)}|${lng.toFixed(4)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({
+      name,
+      address: typeof p.address === "string" ? p.address : undefined,
+      lat,
+      lng,
+      // `day` drives the marker colour and the legend. A place that arrives
+      // without one used to pass through as undefined and break colouring
+      // quietly; it falls back to day 1 instead, because dropping a place the
+      // itinerary names is the worse failure.
+      day: Number.isFinite(Number(p.day)) ? Number(p.day) : 1,
+      type: typeof p.type === "string" ? p.type : undefined,
+    });
+  }
+
+  return out;
 }

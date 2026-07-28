@@ -347,6 +347,8 @@ A JSON array of every named place mentioned anywhere in this trip, in a code blo
 
 Real coordinates. day must be between 1 and ${days}. Type: cafe/restaurant/attraction/museum/park/market/bar/transit/hotel/neighborhood.
 
+At most 3 entries per day and no more than ${Math.min(36, days * 3)} in total — pick the places worth finding on a map. List each place once even if the itinerary visits it twice. A complete short list beats a long one that gets cut off half way.
+
 NEVER write "around" or "approximately" for prices. No filler, no clichés. Markdown only.`;
 
     const partThree = `${closingContext}\n\n---\n\n${closingSections}`;
@@ -368,7 +370,12 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
       ? [
           { user: partOne, maxTokens: 3000 },
           ...dayParts.map((user, i) => ({ user, maxTokens: dayBudget(dayBlocks[i]) })),
-          { user: partThree, maxTokens: 2400 },
+          // The closing pass carries six prose sections plus the map data,
+          // and the map grows with the trip while the prose does not. A flat
+          // 2,400 was enough for three days and ran out mid-array on twelve,
+          // ending the JSON on `{"name":` — which cost a long trip every one
+          // of its pins. Roughly 50 tokens per place, three places a day.
+          { user: partThree, maxTokens: Math.min(6000, 2200 + days * 170) },
         ]
       : [
           {
