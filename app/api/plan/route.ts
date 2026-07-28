@@ -111,10 +111,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The ceiling only exists to reject nonsense, and it has to clear
+    // currencies with small unit values — a fortnight in PKR, INR or JPY runs
+    // into seven figures perfectly legitimately.
     const budgetNum = parseInt(String(budget), 10);
-    if (!Number.isFinite(budgetNum) || budgetNum < 1 || budgetNum > 1_000_000) {
+    if (!Number.isFinite(budgetNum) || budgetNum < 1 || budgetNum > 1_000_000_000) {
       return new Response(
-        JSON.stringify({ error: "Budget must be a number between 1 and 1,000,000." }),
+        JSON.stringify({ error: "Budget must be a positive number." }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
