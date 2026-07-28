@@ -292,13 +292,18 @@ export default function PlanPage() {
                     >
                       {cur.symbol}
                     </span>
+                    {/* step must be 1, not a round number: the browser validates
+                        against min + (n × step), so min=1 with step=10 silently
+                        rejects everything that is not 1, 11, 21… — which is how
+                        a perfectly good 300000 became "Enter a valid value". */}
                     <input
                       type="number"
                       name="budget"
                       required
                       min={1}
-                      step={10}
-                      placeholder="600"
+                      step={1}
+                      inputMode="numeric"
+                      placeholder={cur.code === "EUR" ? "600" : "300000"}
                       value={budget}
                       onChange={(e) => setBudget(e.target.value)}
                       className={`${INPUT} tnum`}
@@ -354,17 +359,27 @@ export default function PlanPage() {
                       </span>
                       per person, per day
                     </span>
-                    <span
-                      className={`text-[0.76rem] font-medium ${
-                        perDay < 35
-                          ? "text-[var(--color-signal-500)]"
-                          : perDay < 70
-                          ? "text-[var(--color-day-2)]"
-                          : "text-[var(--color-sage-500)]"
-                      }`}
-                    >
-                      {perDay < 35 ? "Very tight" : perDay < 70 ? "Workable" : "Comfortable"}
-                    </span>
+                    {/* The bands are calibrated in euros. Rather than invent
+                        exchange rates that would drift out of date, the verdict
+                        is only offered for EUR — the itinerary's own Reality
+                        check does this properly using live local prices. */}
+                    {currency === "EUR" ? (
+                      <span
+                        className={`text-[0.76rem] font-medium ${
+                          perDay < 35
+                            ? "text-[var(--color-signal-500)]"
+                            : perDay < 70
+                            ? "text-[var(--color-day-2)]"
+                            : "text-[var(--color-sage-500)]"
+                        }`}
+                      >
+                        {perDay < 35 ? "Very tight" : perDay < 70 ? "Workable" : "Comfortable"}
+                      </span>
+                    ) : (
+                      <span className="text-[0.76rem] text-faint">
+                        Verdict comes with the plan
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
