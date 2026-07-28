@@ -264,6 +264,65 @@ export function hasProvider(): boolean {
  * different claims, and this is the only way to tell them apart from
  * outside.
  */
+/**
+ * Sends a one-token request to every configured model and reports what came
+ * back. Returns status codes and a short reason only — never a response body,
+ * which can carry account details.
+ *
+ * Exists because a failing provider is otherwise only visible in server logs,
+ * and "the key is set" does not imply "the key works with this model".
+ */
+export async function probeProviders() {
+  const results: {
+    provider: string;
+    model: string;
+    status: number | string;
+    ok: boolean;
+    reason: string;
+  }[] = [];
+
+  for (const provider of PROVIDERS) {
+    if (!provider.enabled()) continue;
+
+    for (const model of provider.models) {
+      try {
+        const res = await provider.request(model, {
+          system: "Reply with the single word OK.",
+          user: "ping",
+        });
+        // Release the stream so the connection does not stay open.
+        await res.body?.cancel().catch(() => {});
+
+        results.push({
+          provider: provider.name,
+          model,
+          status: res.status,
+          ok: res.ok,
+          reason: res.ok
+            ? "reachable"
+            : res.status === 401 || res.status === 403
+            ? "key rejected"
+            : res.status === 404
+            ? "model not found — the id may have been retired"
+            : res.status === 429
+            ? "rate limited or out of quota"
+            : `http ${res.status}`,
+        });
+      } catch (err) {
+        results.push({
+          provider: provider.name,
+          model,
+          status: "network",
+          ok: false,
+          reason: (err as Error)?.message?.slice(0, 80) ?? "request failed",
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
 export function providerStatus() {
   return PROVIDERS.map((p) => {
     const envVar = `${p.name.toUpperCase()}_API_KEY`;
