@@ -44,7 +44,10 @@ export default function TripMap({ places }: { places: Place[] }) {
     const bounds = new mapboxgl.LngLatBounds();
 
     validPlaces.forEach((place) => {
-      const color = dayColors[(place.day - 1) % dayColors.length];
+      // place.day may be missing or 0 in a malformed model response; clamp so
+      // the modulo cannot index with a negative number.
+      const dayNum = Math.max(1, Math.floor(place.day || 1));
+      const color = dayColors[(dayNum - 1) % dayColors.length];
 
       const el = document.createElement("div");
       el.style.cssText = `
@@ -56,15 +59,28 @@ export default function TripMap({ places }: { places: Place[] }) {
         cursor: pointer;
       `;
 
+      // Built as DOM nodes with textContent, never as an HTML string.
+      // place.name and place.type come from model output that is shaped by
+      // live web-search results, so setHTML() here is an injection sink: a
+      // page that ranks for a destination query can influence what the model
+      // emits, and that would execute in the visitor's browser.
+      const popupEl = document.createElement("div");
+      popupEl.style.cssText = "color:#111;font-family:system-ui;padding:4px;";
+
+      const nameEl = document.createElement("strong");
+      nameEl.style.fontSize = "14px";
+      nameEl.textContent = String(place.name ?? "Unnamed place");
+
+      const metaEl = document.createElement("span");
+      metaEl.style.cssText = "font-size:12px;color:#666;";
+      metaEl.textContent = `Day ${dayNum}${place.type ? ` · ${place.type}` : ""}`;
+
+      popupEl.append(nameEl, document.createElement("br"), metaEl);
+
       new mapboxgl.Marker(el)
         .setLngLat([place.lng, place.lat])
         .setPopup(
-          new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(
-            `<div style="color: #111; font-family: system-ui; padding: 4px;">
-              <strong style="font-size: 14px;">${place.name}</strong><br/>
-              <span style="font-size: 12px; color: #666;">Day ${place.day}${place.type ? ` · ${place.type}` : ""}</span>
-            </div>`
-          )
+          new mapboxgl.Popup({ offset: 25, closeButton: false }).setDOMContent(popupEl)
         )
         .addTo(map);
 
