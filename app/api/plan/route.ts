@@ -1,6 +1,11 @@
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
-import { generateStream, hasProvider, providerStatus } from "@/lib/llm";
+import {
+  generateStream,
+  hasProvider,
+  providerStatus,
+  probeProviders,
+} from "@/lib/llm";
 
 /**
  * Health check. Reports which providers the running deployment can see, and
@@ -11,11 +16,17 @@ import { generateStream, hasProvider, providerStatus } from "@/lib/llm";
  * so "I added the variable" and "the deployment has it" are different
  * claims. Safe to delete once configuration has settled.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // ?probe=1 additionally sends a one-token request to each configured model
+  // and reports the status code, so a bad key or a retired model id can be
+  // diagnosed without server log access.
+  const probe = request.nextUrl.searchParams.get("probe") === "1";
+
   return Response.json(
     {
       ok: hasProvider(),
       providers: providerStatus(),
+      ...(probe ? { probe: await probeProviders() } : {}),
       search: {
         envVar: "TAVILY_API_KEY",
         configured: Boolean(process.env.TAVILY_API_KEY),
