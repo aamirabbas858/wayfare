@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
     const systemPrompt = `You are an experienced, honest travel planner who has LIVED in ${dest} for years. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler.
 
 CRITICAL RULES:
-1. Use REAL current prices from the search results provided. Never write "around" or "approximately".
+1. Use REAL current prices from the search results provided. Never write "around" or "approximately". If a price is NOT in the search results, do not supply one from memory — write "price not confirmed" and move on. An admitted gap is worth more than a number the reader cannot rely on, and entrance fees are where this goes wrong most often: they change yearly, plenty of places are free, and a fee invented for a free museum is the kind of error that makes every other figure suspect.
 2. Account for SEASONALITY when pricing.
 3. NAME specific places — "Wombat's Hostel near Liverpool Street" not "a hostel".
 4. ASSESS budget with honest arithmetic. Per-person daily budget = total ÷ travelers ÷ days. Compare against real costs in the search results. If the math works, say it works — clearly and without hedging. Only flag a budget as tight if the numbers genuinely do not add up. Never manufacture concern, and never say something is fine when it clearly is not.
@@ -151,7 +151,8 @@ CRITICAL RULES:
 6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.
 7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost the local equivalent of 5-15 euros a day in cheap cities and 15-25 in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.
 8. ${conversion}
-9. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
+9. ONE PRICE PER THING, EVERYWHERE. Each real-world cost — a specific hostel's nightly rate, the day pass, the daily food figure — is decided once and then reused verbatim in every section that mentions it: the daily minimum, the budget lines, the totals. Before writing a price, check whether you have already given that thing a price earlier in this document, and if so use that exact figure. Two different numbers for the same hostel means one of them was invented, and the reader has no way to tell which.
+10. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
 
     const tripFacts = `Trip details:
 - Traveller departing from: ${orig}
@@ -221,7 +222,9 @@ ${
       fx && fx.code !== "EUR"
         ? `Every figure on that line is a CONVERTED ${fx.code} amount. Convert each one with the rates above before adding them up — do not carry a local price over and change the symbol. A €11.20 day pass is ${cur.symbol}${Math.round(11.2 * fx.perEUR).toLocaleString("en-GB")} on that line, never ${cur.symbol}11. If the three components do not sum to the total, the line is wrong.\n`
         : ""
-    }Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
+    }The hostel, food and transit figures you choose here are the ones for the whole document. Budget breakdown below reuses these exact numbers — it does not price the same hostel again and arrive somewhere different.
+
+Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
 A markdown list, one bullet per item. Never a paragraph.
@@ -233,7 +236,7 @@ Line-by-line per-person costs using the cheapest realistic options from search r
   - Lodging: cheapest hostel/hotel per night × ${days} nights
   - Food: local market lunch + street food estimate per day × ${days} days (NOT tourist restaurant prices)
   - Transit: cheapest pass for this trip length
-  - Activities: named places with real entrance fees
+  - Activities: named places, each with the entrance fee as it appears in the searches. Write "free" where entry is free and "fee not confirmed" where the searches do not give one — never a guessed amount.
   - Buffer: 10% of subtotal
 Put each line on its own bullet. Put the running total on its own separate line, and the verdict on another line after it — never append the total or the verdict to the end of the buffer bullet. Then one of:
   • If total < ${cur.symbol}${budgetNum} × 0.85 → "BUDGET VERDICT: Comfortable — ${cur.symbol}X surplus, no stress needed."
