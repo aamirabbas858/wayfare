@@ -186,7 +186,11 @@ Do not open with "The single most...". Do not write "validate your ticket before
 ## Reality check
 Show the arithmetic on one line, then give the verdict:
 "${cur.symbol}${dailyPerPerson}/day per person. Cheapest viable day in ${dest}: hostel ${cur.symbol}[X]/night + street food ${cur.symbol}[Y]/day + transit ${cur.symbol}[Z]/day = ${cur.symbol}[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
-Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
+${
+      fx && fx.code !== "EUR"
+        ? `Every figure on that line is a CONVERTED ${fx.code} amount. Convert each one with the rates above before adding them up — do not carry a local price over and change the symbol. A €11.20 day pass is ${cur.symbol}${Math.round(11.2 * fx.perEUR).toLocaleString("en-GB")} on that line, never ${cur.symbol}11. If the three components do not sum to the total, the line is wrong.\n`
+        : ""
+    }Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
 A markdown list, one bullet per item. Never a paragraph.

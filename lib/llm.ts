@@ -156,6 +156,29 @@ const PROVIDERS: Provider[] = [groq, gemini, openrouter];
 /** Status codes worth trying the next model or provider for. */
 const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
+/** Longest a request will sit waiting out a rate limit. */
+const MAX_WAIT_MS = 20_000;
+
+/**
+ * How long the provider says to wait, or `null` when waiting will not help.
+ *
+ * A 429 means two very different things on a free tier. Per-minute limits
+ * clear on their own and are worth pausing for. Daily allowances and depleted
+ * balances do not, and the distinction matters: Gemini answers "prepayment
+ * credits are depleted" with no retry hint, and retrying its three models
+ * twice each cost ten seconds and eight requests to learn nothing.
+ */
+function retryAfterMs(res: Response, body: string): number | null {
+  const header = Number(res.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1000;
+
+  // Groq reports it in prose rather than a header: "try again in 31m14.016s".
+  const m = body.match(/try again in (?:(\d+)m)?([\d.]+)s/);
+  if (m) return (Number(m[1] ?? 0) * 60 + Number(m[2])) * 1000;
+
+  return null;
+}
+
 export class AllProvidersFailed extends Error {
   constructor(public readonly tried: string[]) {
     super(
@@ -268,21 +291,31 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             // to the next (halved) attempt on this same model.
             if (res.status === 413) continue;
 
-            // 429 on a free tier is usually tokens-per-minute, which clears on
-            // its own. Multi-pass generation hits this routinely: the first
-            // pass succeeds and the rest arrive too quickly. Waiting is the
-            // correct response — moving to another provider throws away a
-            // working one over a limit measured in seconds.
-            if (res.status === 429 && !rateLimited) {
-              rateLimited = true;
-              const after = Number(res.headers.get("retry-after"));
-              const waitMs = Math.min(
-                Number.isFinite(after) && after > 0 ? after * 1000 : 6000,
-                20_000
-              );
-              console.warn(`[llm] ${label} rate limited, waiting ${waitMs}ms`);
-              await new Promise((r) => setTimeout(r, waitMs));
-              continue; // same model, same budget — the limit is time-based
+            // 429 is either a per-minute limit worth waiting out or a daily
+            // allowance that is not. Waiting is right for the first: multi-pass
+            // generation trips it routinely, and moving on would throw away a
+            // working provider over a limit measured in seconds.
+            if (res.status === 429) {
+              const wait = retryAfterMs(res, detail);
+
+              // Out of quota rather than going too fast. Every model here
+              // draws on the same allowance, so trying the rest is guaranteed
+              // to fail — skip to the next provider immediately.
+              if (wait === null || wait > MAX_WAIT_MS) {
+                console.warn(
+                  `[llm] ${provider.name} quota exhausted${
+                    wait ? ` for ${Math.round(wait / 60000)}m` : ""
+                  }, skipping provider`
+                );
+                break models;
+              }
+
+              if (!rateLimited) {
+                rateLimited = true;
+                console.warn(`[llm] ${label} rate limited, waiting ${wait}ms`);
+                await new Promise((r) => setTimeout(r, wait));
+                continue; // same model, same budget — the limit is time-based
+              }
             }
 
             // A transient or quota failure will not improve with a smaller
