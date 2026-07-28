@@ -1,4 +1,5 @@
 import { tavily } from "@tavily/core";
+import { resolveCurrency } from "@/lib/currency";
 import { NextRequest } from "next/server";
 import {
   generateStream,
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { destination, origin, startDate, endDate, budget, travelers, interests } = body;
+    const { destination, origin, startDate, endDate, budget, travelers, interests, currency } = body;
 
     if (!destination || !origin || !startDate || !endDate || !budget || !interests) {
       return new Response(
@@ -117,6 +118,9 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    // Unrecognised codes fall back to EUR, so nothing arbitrary reaches the prompt.
+    const cur = resolveCurrency(currency);
 
     const today = new Date().toISOString().split("T")[0];
     const year = new Date(startDate).getFullYear();
@@ -152,8 +156,8 @@ CRITICAL RULES:
 4. ASSESS budget with honest arithmetic. Per-person daily budget = total ÷ travelers ÷ days. Compare against real costs in the search results. If the math works, say it works — clearly and without hedging. Only flag a budget as tight if the numbers genuinely do not add up. Never manufacture concern, and never say something is fine when it clearly is not.
 5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
 6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.
-7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost €5-15/day in cheap cities and €15-25/day in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.
-8. EVERY price you write must be in euros with a € sign. Search results sometimes quote other currencies (zł, $, £) because of where the page was published. Convert to euros and write only the euro figure. Never print a foreign-currency amount, and never write "approximately" or "around" next to it — pick the number you believe and state it.
+7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost the local equivalent of 5-15 euros a day in cheap cities and 15-25 in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.
+8. EVERY price you write must be in ${cur.label} using the symbol ${cur.symbol}. Search results often quote other currencies because of where the page was published — convert them and print only the ${cur.code} figure. Never show a foreign-currency amount, and never write "approximately" or "around" beside a number: choose the figure you believe and state it.
 9. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
 
     const userPrompt = `Trip details:
@@ -161,7 +165,7 @@ CRITICAL RULES:
 - Destination: ${dest}
 - Travel dates: ${startDate} to ${endDate} (${days} days)
 - Group size: ${travelers} traveler(s)
-- Total budget: €${budgetNum}
+- Total budget: ${cur.symbol}${budgetNum} (${cur.code})
 - What they want: ${interestsT}
 
 Today's date: ${today}
@@ -179,7 +183,7 @@ Now deliver a complete travel plan with this EXACT structure:
 
 ## Reality check
 Show the arithmetic on one line, then give the verdict:
-"€${dailyPerPerson}/day per person. Cheapest viable day in ${dest}: hostel €[X]/night + street food €[Y]/day + transit €[Z]/day = €[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
+"${cur.symbol}${dailyPerPerson}/day per person. Cheapest viable day in ${dest}: hostel ${cur.symbol}[X]/night + street food ${cur.symbol}[Y]/day + transit ${cur.symbol}[Z]/day = ${cur.symbol}[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
 Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
@@ -194,9 +198,9 @@ Line-by-line per-person costs using the cheapest realistic options from search r
   - Activities: named places with real entrance fees
   - Buffer: 10% of subtotal
 Put each line on its own bullet. Put the running total on its own separate line, and the verdict on another line after it — never append the total or the verdict to the end of the buffer bullet. Then one of:
-  • If total < €${budgetNum} × 0.85 → "BUDGET VERDICT: Comfortable — €X surplus, no stress needed."
-  • If total < €${budgetNum} → "BUDGET VERDICT: Workable — €X surplus, keep an eye on food spend."
-  • If total > €${budgetNum} → "BUDGET VERDICT: Over budget by €X — suggest [specific cut]."
+  • If total < ${cur.symbol}${budgetNum} × 0.85 → "BUDGET VERDICT: Comfortable — ${cur.symbol}X surplus, no stress needed."
+  • If total < ${cur.symbol}${budgetNum} → "BUDGET VERDICT: Workable — ${cur.symbol}X surplus, keep an eye on food spend."
+  • If total > ${cur.symbol}${budgetNum} → "BUDGET VERDICT: Over budget by ${cur.symbol}X — suggest [specific cut]."
 The verdict lives here, not in The Essentials.
 
 ## Getting there
@@ -216,7 +220,7 @@ Each bullet: time, place name + neighbourhood + nearest transit stop, real price
 Format it exactly like this, and never compress several days into one paragraph:
 
 ### Day 1
-- 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). €2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
+- 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). ${cur.symbol}2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
 - 12:00 — ...
 
 ### Day 2
