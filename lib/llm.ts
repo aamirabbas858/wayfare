@@ -59,7 +59,15 @@ const gemini: Provider = {
 const groq: Provider = {
   name: "groq",
   enabled: () => Boolean(process.env.GROQ_API_KEY),
-  models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+  // Groq production models only — preview models can be withdrawn at short
+  // notice, which is exactly the fragility this file exists to avoid.
+  // Ordered by output quality: the itinerary is long-form prose, so the
+  // larger models are worth the slower tokens.
+  models: [
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant",
+  ],
   request: (model, { system, user, signal }) =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
