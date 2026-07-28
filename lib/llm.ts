@@ -81,7 +81,10 @@ const groq: Provider = {
   // llama-3.1-8b-instant both return 413 for a request this size, so they are
   // not listed. maxTokens is the completion cap the model accepts, not a
   // preference — exceeding it is rejected before any generation happens.
-  models: [{ id: "llama-3.3-70b-versatile", maxTokens: 4096 }],
+  // 8192 is accepted by this model — the earlier 413s came from prompt size,
+  // not the completion cap, and search results are now clipped upstream. The
+  // itinerary is ~15 sections, so a low cap shows up directly as thin days.
+  models: [{ id: "llama-3.3-70b-versatile", maxTokens: 8192 }],
   request: (model, { system, user, signal }) =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",

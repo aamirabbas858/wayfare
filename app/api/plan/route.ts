@@ -152,7 +152,9 @@ CRITICAL RULES:
 4. ASSESS budget with honest arithmetic. Per-person daily budget = total ÷ travelers ÷ days. Compare against real costs in the search results. If the math works, say it works — clearly and without hedging. Only flag a budget as tight if the numbers genuinely do not add up. Never manufacture concern, and never say something is fine when it clearly is not.
 5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
 6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.
-7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost €5-15/day in cheap cities and €15-25/day in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.`;
+7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost €5-15/day in cheap cities and €15-25/day in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.
+8. EVERY price you write must be in euros with a € sign. Search results sometimes quote other currencies (zł, $, £) because of where the page was published. Convert to euros and write only the euro figure. Never print a foreign-currency amount, and never write "approximately" or "around" next to it — pick the number you believe and state it.
+9. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
 
     const userPrompt = `Trip details:
 - Traveler departing from: ${orig}
@@ -191,7 +193,7 @@ Line-by-line per-person costs using the cheapest realistic options from search r
   - Transit: cheapest pass for this trip length
   - Activities: named places with real entrance fees
   - Buffer: 10% of subtotal
-Show running total. Then one of:
+Put each line on its own bullet. Put the running total on its own separate line, and the verdict on another line after it — never append the total or the verdict to the end of the buffer bullet. Then one of:
   • If total < €${budgetNum} × 0.85 → "BUDGET VERDICT: Comfortable — €X surplus, no stress needed."
   • If total < €${budgetNum} → "BUDGET VERDICT: Workable — €X surplus, keep an eye on food spend."
   • If total > €${budgetNum} → "BUDGET VERDICT: Over budget by €X — suggest [specific cut]."
@@ -207,7 +209,18 @@ From ${orig} → ${dest}. Use flight prices from the searches. Cheapest day, che
 Exact pass for this trip length using prices from the transit search. Where to buy. Validation rules. Fine for not validating. Plus 2-3 sentences on how the system works.
 
 ## Day-by-day plan
-Day 1 = arrival, last day = departure. For each day, 4-6 stops with: time, place + neighborhood + nearest transit stop, real price, 1-line honest assessment, watch-outs.
+This is the most important section. Give every day its own \`### Day N\` heading on its own line, then 4-6 bullet points under it — one bullet per stop.
+
+Each bullet: time, place name + neighbourhood + nearest transit stop, real price, then one honest sentence about whether it is worth it.
+
+Format it exactly like this, and never compress several days into one paragraph:
+
+### Day 1
+- 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). €2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
+- 12:00 — ...
+
+### Day 2
+- ...
 
 ## Tourist traps to skip
 Specific places NOT worth it with what to do instead.
