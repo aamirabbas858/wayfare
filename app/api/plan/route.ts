@@ -1,5 +1,6 @@
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
+import { generateStream, hasProvider } from "@/lib/llm";
 
 export const maxDuration = 300;
 
@@ -21,6 +22,18 @@ async function executeSearch(query: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Fail fast and clearly rather than running four Tavily searches first
+    // and only then discovering there is nothing to generate with.
+    if (!hasProvider()) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "No planning provider is configured. Set GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY.",
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const body = await request.json();
     const { destination, origin, startDate, endDate, budget, travelers, interests } = body;
 
@@ -178,61 +191,12 @@ Include EVERY named place. Use realistic lat/lng. Type: cafe/restaurant/attracti
 
 NEVER write "around" or "approximately" for prices. No filler, no clichés. Markdown only.`;
 
-    const encoder = new TextEncoder();
-
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          const models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
-          let geminiResp: Response | null = null;
-          for (const model of models) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`;
-            const resp = await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: systemPrompt }] },
-                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-              }),
-            });
-            if (resp.ok) { geminiResp = resp; break; }
-            // 429/500/503 are transient or per-model — try the next model.
-            // Anything else is a real failure; log the detail server-side but
-            // never stream the upstream error body to the client.
-            if (![429, 500, 503].includes(resp.status)) {
-              console.error(`Gemini ${model} ${resp.status}:`, await resp.text());
-              throw new Error("The planning service rejected the request. Please try again.");
-            }
-          }
-          if (!geminiResp) throw new Error("All Gemini models temporarily unavailable. Please try again in a moment.");
-
-          const reader = geminiResp.body!.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split("\n");
-            buf = lines.pop() || "";
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const json = line.slice(6).trim();
-              if (!json || json === "[DONE]") continue;
-              try {
-                const data = JSON.parse(json);
-                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (text) controller.enqueue(encoder.encode(text));
-              } catch {}
-            }
-          }
-          controller.close();
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Stream error";
-          controller.enqueue(encoder.encode(`\n\n[Error: ${message}]`));
-          controller.close();
-        }
-      },
+    // Falls through Groq → Gemini → OpenRouter, skipping any provider whose
+    // key is absent. One exhausted quota no longer takes the product down.
+    const stream = generateStream({
+      system: systemPrompt,
+      user: userPrompt,
+      signal: request.signal,
     });
 
     return new Response(stream, {
