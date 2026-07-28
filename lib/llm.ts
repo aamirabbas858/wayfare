@@ -178,8 +178,19 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
       for (const provider of PROVIDERS) {
         if (!provider.enabled()) continue;
 
-        for (const model of provider.models) {
-          const label = `${provider.name}/${model.id}`;
+        models: for (const spec of provider.models) {
+        // A provider can reject a request outright when prompt + completion
+        // exceeds its limit, and the threshold is neither documented nor
+        // stable across tiers. Rather than pick a conservative constant and
+        // permanently give up the longer itineraries, ask for the full budget
+        // first and halve it on a 413. A shorter plan beats no plan.
+        const attempts = [spec.maxTokens, Math.floor(spec.maxTokens / 2)].filter(
+          (n, i, a) => n >= 1024 && a.indexOf(n) === i
+        );
+
+        for (const maxTokens of attempts) {
+          const model = { ...spec, maxTokens };
+          const label = `${provider.name}/${model.id}@${maxTokens}`;
           let res: Response;
 
           try {
@@ -191,7 +202,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             }
             console.error(`[llm] ${label} network error:`, err);
             tried.push(label);
-            continue;
+            continue models;
           }
 
           if (!res.ok || !res.body) {
@@ -201,11 +212,19 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             const detail = await res.text().catch(() => "");
             console.error(`[llm] ${label} HTTP ${res.status}: ${detail.slice(0, 300)}`);
             tried.push(label);
-            if (RETRYABLE.has(res.status)) continue;
-            // A non-retryable error is specific to this provider (bad key,
-            // unknown model), so move on to the next provider rather than
-            // burning the remaining models here.
-            break;
+
+            // 413 means prompt + completion exceeded the limit. Asking for
+            // fewer tokens is the one thing that can fix it, so fall through
+            // to the next (halved) attempt on this same model.
+            if (res.status === 413) continue;
+
+            // A transient or quota failure will not improve with a smaller
+            // request — move to the next model.
+            if (RETRYABLE.has(res.status)) continue models;
+
+            // Anything else is specific to this provider (bad key, unknown
+            // model), so skip its remaining models entirely.
+            break models;
           }
 
           // Committed to this provider from here on.
@@ -256,6 +275,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 
           // Connected but produced nothing — treat as a failure and continue.
           console.error(`[llm] ${label} returned an empty stream`);
+        }
         }
       }
 
