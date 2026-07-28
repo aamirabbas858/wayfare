@@ -1,7 +1,8 @@
 import { tavily } from "@tavily/core";
 import { resolveCurrency } from "@/lib/currency";
 import { NextRequest } from "next/server";
-import { generateStream, hasProvider } from "@/lib/llm";
+import { generateSequence, hasProvider } from "@/lib/llm";
+import { ratesFor, conversionNote } from "@/lib/fx";
 
 export const maxDuration = 300;
 
@@ -88,6 +89,12 @@ export async function POST(request: NextRequest) {
     // Unrecognised codes fall back to EUR, so nothing arbitrary reaches the prompt.
     const cur = resolveCurrency(currency);
 
+    // Real rates, fetched here rather than asked of the model. Told to
+    // "convert into PKR" the model relabels instead of converting, which
+    // turned a €60 fine into "Rs 60" — out by a factor of 300.
+    const fx = await ratesFor(cur.code);
+    const conversion = conversionNote(fx, cur.label);
+
     const today = new Date().toISOString().split("T")[0];
     const year = new Date(startDate).getFullYear();
     const month = new Date(startDate).toLocaleString("default", { month: "long" });
@@ -123,29 +130,35 @@ CRITICAL RULES:
 5. EXPLAIN local concepts visitors won't intuit (transit validation, tipping norms, queueing).
 6. INCLUDE a safety section with realistic concerns. Matter-of-fact, never fear-mongering.
 7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost the local equivalent of 5-15 euros a day in cheap cities and 15-25 in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.
-8. EVERY price you write must be in ${cur.label} using the symbol ${cur.symbol}. Search results often quote other currencies because of where the page was published — convert them and print only the ${cur.code} figure. Never show a foreign-currency amount, and never write "approximately" or "around" beside a number: choose the figure you believe and state it.
+8. ${conversion}
 9. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
 
-    const userPrompt = `Trip details:
-- Traveler departing from: ${orig}
+    const sharedContext = `Trip details:
+- Traveller departing from: ${orig}
 - Destination: ${dest}
 - Travel dates: ${startDate} to ${endDate} (${days} days)
-- Group size: ${travelers} traveler(s)
+- Group size: ${travelers} traveller(s)
 - Total budget: ${cur.symbol}${budgetNum} (${cur.code})
 - What they want: ${interestsT}
 
 Today's date: ${today}
 
-I have already researched current information for you. Use the search results below to inform your response.
+Researched information, use it rather than recalling from memory:
 
-${searchContext}
+${searchContext}`;
+
+    const partOne = `${sharedContext}
 
 ---
 
-Now deliver a complete travel plan with this EXACT structure:
+Write these sections and stop. Do not write the day-by-day plan yet.
 
 ## The Essentials
-3 sentences, no budget discussion: (1) The single most time-sensitive booking for this specific trip and exactly why it needs to go TODAY; (2) the single most important local rule or watch-out in ${dest} that catches first-time visitors off guard; (3) one practical tip specific to ${dest} that guidebooks don't mention.
+Three short paragraphs, no budget talk. Each must contain a fact that appears in the search results above or a detail true only of ${dest} — a named operator, a specific street, a real amount, a date.
+
+Write about: what has to be booked first and why waiting costs money; the local rule most likely to catch this traveller out; something useful that guidebooks leave out.
+
+Do not open with "The single most...". Do not write "validate your ticket before boarding" unless the searches actually show that is how ${dest} works and the fine is real — it is the default answer for everywhere and it is often wrong. If nothing specific is known about ${dest} on one of these, write about something that is, and say plainly that the detail could not be confirmed.
 
 ## Reality check
 Show the arithmetic on one line, then give the verdict:
@@ -153,7 +166,8 @@ Show the arithmetic on one line, then give the verdict:
 Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
-Items to book NOW — flights, transit passes, popular reservations.
+A markdown list, one bullet per item. Never a paragraph.
+Each bullet: what to book, where to book it, the price from the searches, and what it costs to wait.
 
 ## Budget breakdown
 Line-by-line per-person costs using the cheapest realistic options from search results:
@@ -176,21 +190,55 @@ From ${orig} → ${dest}. Use flight prices from the searches. Cheapest day, che
 3 NAMED options at different price points using the accommodation search results. Skip if user mentions staying with friends.
 
 ## Local transit
-Exact pass for this trip length using prices from the transit search. Where to buy. Validation rules. Fine for not validating. Plus 2-3 sentences on how the system works.
+A markdown list, one bullet per point. Never a paragraph.
+- The exact pass for a ${days}-day trip, with its real price from the searches
+- Where to buy it
+- How validation works here, or state plainly that it could not be confirmed
+- The actual fine for travelling without a valid ticket, in the local currency
+- One thing about the system that catches visitors out
 
-## Day-by-day plan
-This is the most important section. Give every day its own \`### Day N\` heading on its own line, then 4-6 bullet points under it — one bullet per stop.
 
-Each bullet: time, place name + neighbourhood + nearest transit stop, real price, then one honest sentence about whether it is worth it.
+Stop after "Local transit". Do not continue past it.`;
 
-Format it exactly like this, and never compress several days into one paragraph:
+    // A 14-day itinerary at four stops a day does not fit in one completion,
+    // and the failure is silent — the model stops and the reader thinks the
+    // plan is finished. Days are generated in blocks so trip length stops
+    // being a constraint.
+    const DAYS_PER_PASS = 4;
+    const dayBlocks: Array<[number, number]> = [];
+    for (let d = 1; d <= days; d += DAYS_PER_PASS) {
+      dayBlocks.push([d, Math.min(d + DAYS_PER_PASS - 1, days)]);
+    }
 
-### Day 1
-- 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). ${cur.symbol}2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
-- 12:00 — ...
+    // Detail per day scales down as trips get longer, so a fortnight stays
+    // readable and affordable rather than being cut off half way.
+    const stopsPerDay = days <= 5 ? "4-6" : days <= 10 ? "3-5" : "3-4";
 
-### Day 2
-- ...
+    const dayParts = dayBlocks.map(([from, to], i) => `${sharedContext}
+
+---
+
+Write ONLY days ${from} to ${to} of this ${days}-day trip. ${
+      i === 0
+        ? "Day 1 is arrival, so plan around the arrival time rather than a full day."
+        : "These are middle days; assume the traveller is already there and settled."
+    }${to === days ? " The final day is departure — keep it light and near transport." : ""}
+
+${i === 0 ? "Begin with the heading `## Day-by-day plan` on its own line, then the days." : "Do NOT repeat the `## Day-by-day plan` heading — continue straight from the previous days."}
+
+Each day gets its own \`### Day N\` heading, then ${stopsPerDay} bullets, one per stop:
+time — place name + neighbourhood (nearest transit stop). Real price. One honest sentence on whether it is worth it.
+
+### Day ${from}
+- 09:30 — Café Aloma, Campo de Ourique (tram 28 to Rua Saraiva de Carvalho). €2.20 for a pastel de nata and a bica. Locals outnumber tourists before 11:00; after that the queue is not worth it.
+
+Keep every stop inside days ${from}-${to}. Do not write any other section. Do not summarise.`);
+
+    const partThree = `${sharedContext}
+
+---
+
+The itinerary above has already covered the essentials, budget, transport, lodging and all ${days} days. Write ONLY these closing sections:
 
 ## Tourist traps to skip
 Specific places NOT worth it with what to do instead.
@@ -211,7 +259,7 @@ SIM/eSIM, tipping norms, tap water, emergency number, useful local apps.
 3-5 specific claims to double-check.
 
 ## Map data
-At the very end, output a JSON array of ALL named places. Format EXACTLY like this in a code block:
+A JSON array of every named place mentioned anywhere in this trip, in a code block:
 
 \`\`\`json
 [
@@ -219,17 +267,20 @@ At the very end, output a JSON array of ALL named places. Format EXACTLY like th
 ]
 \`\`\`
 
-Include EVERY named place. Use realistic lat/lng. Type: cafe/restaurant/attraction/museum/park/market/bar/transit/hotel/neighborhood.
+Real coordinates. day must be between 1 and ${days}. Type: cafe/restaurant/attraction/museum/park/market/bar/transit/hotel/neighborhood.
 
 NEVER write "around" or "approximately" for prices. No filler, no clichés. Markdown only.`;
 
-    // Falls through Groq → Gemini → OpenRouter, skipping any provider whose
-    // key is absent. One exhausted quota no longer takes the product down.
-    const stream = generateStream({
-      system: systemPrompt,
-      user: userPrompt,
-      signal: request.signal,
-    });
+    // One pass for the overview, one per block of days, one for the closing
+    // sections. Each falls through Groq → Gemini → OpenRouter independently,
+    // so an exhausted quota part-way still leaves the earlier passes intact.
+    const stream = generateSequence(
+      [partOne, ...dayParts, partThree].map((user) => ({
+        system: systemPrompt,
+        user,
+        signal: request.signal,
+      }))
+    );
 
     return new Response(stream, {
       headers: {

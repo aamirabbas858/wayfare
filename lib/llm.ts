@@ -168,6 +168,45 @@ export class AllProvidersFailed extends Error {
  * emitting we stay with it — switching mid-document would splice two
  * different itineraries together, which is worse than a truncated one.
  */
+/**
+ * Runs several prompts in order and concatenates their output into one
+ * stream, with `join` between each.
+ *
+ * A long itinerary cannot fit in a single completion. Fourteen days at four
+ * stops each exceeds any free-tier budget, and the failure is silent: the
+ * model stops mid-way and the reader believes the plan is finished. Splitting
+ * the work into passes makes the length of the trip stop mattering.
+ *
+ * Passes run sequentially rather than in parallel because each is a separate
+ * rate-limited request, and because the output has to arrive in order.
+ */
+export function generateSequence(
+  parts: GenerateOptions[],
+  join = "\n\n"
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      for (let i = 0; i < parts.length; i++) {
+        if (i > 0) controller.enqueue(encoder.encode(join));
+
+        const reader = generateStream(parts[i]).getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+      controller.close();
+    },
+  });
+}
+
 export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
