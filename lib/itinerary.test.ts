@@ -63,6 +63,28 @@ assert.deepStrictEqual(partial.places, [], "unparseable JSON yields no places");
 assert.deepStrictEqual(splitMapData(""), { prose: "", places: [] });
 assert.deepStrictEqual(splitMapData("   "), { prose: "", places: [] });
 
+/* ── truncated arrays must still yield the places that arrived ──────── */
+// Taken from a real 12-day New York itinerary whose closing pass ran out of
+// budget mid-array. JSON.parse rejects the whole thing, and the trip lost
+// every pin — the failure this salvage path exists for.
+const TRUNCATED = `## Map data
+
+\`\`\`json
+[
+  {"name": "The Local NYC", "address": "13-02 44th Ave, Long Island City, NY 11101", "lat": 40.7475, "lng": -73.9458, "day": 1, "type": "hotel"},
+  {"name": "Halal Guys", "address": "W 53rd St & 6th Ave, New York, NY 10019", "lat": 40.7615, "lng": -73.9797, "day": 1, "type": "restaurant"},
+  {"name": "Museum of Modern Art (MoMA)", "address": "11 W 53rd St, New York, NY 10019", "lat": 40.7614, "lng": -73.9776, "day": 4, "type": "museum"},
+  {"name": "Museum of Modern Art (MoMA)", "address": "11 W 53rd St, New York, NY 10019", "lat": 40.7614, "lng": -73.9776, "day": 4, "type": "museum"},
+  {"name":`;
+
+const salvaged = splitMapData(TRUNCATED);
+assert.strictEqual(salvaged.places.length, 3, "should keep the complete entries and dedupe MoMA");
+assert.strictEqual(salvaged.places[0].name, "The Local NYC");
+assert.strictEqual(salvaged.places[2].day, 4);
+assert.ok(!salvaged.prose.includes('"lat"'), "truncated JSON leaked into the page");
+// Addresses contain commas — the scan must not split entries on them.
+assert.strictEqual(salvaged.places[0].address, "13-02 44th Ave, Long Island City, NY 11101");
+
 /* ── a trip with no map data is returned whole ──────────────────────── */
 const plain = splitMapData("## Essentials\nJust prose, no places.");
 assert.strictEqual(plain.prose, "## Essentials\nJust prose, no places.");
