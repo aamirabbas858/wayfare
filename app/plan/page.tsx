@@ -12,6 +12,7 @@ import {
   type Section,
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
+import SaveTrip from "@/components/SaveTrip";
 import {
   CURRENCIES,
   DEFAULT_CURRENCY,
@@ -47,6 +48,7 @@ export default function PlanPage() {
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
+  const [submitted, setSubmitted] = useState<Record<string, string> | null>(null);
 
   const cur = resolveCurrency(currency);
 
@@ -121,7 +123,8 @@ export default function PlanPage() {
   const submit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.currentTarget).entries());
+      const data = Object.fromEntries(new FormData(e.currentTarget).entries()) as Record<string, string>;
+      setSubmitted(data);
 
       setPhase("researching");
       setStep(0);
@@ -511,6 +514,25 @@ export default function PlanPage() {
               {phase === "done" && places.length > 0 && (
                 <span className="tnum text-[0.82rem] text-faint">
                   {places.length} places mapped
+                </span>
+              )}
+
+              {phase === "done" && submitted && sections.length > 0 && (
+                <span className="ml-auto">
+                  <SaveTrip
+                    input={{
+                      origin: submitted.origin ?? "",
+                      destination: submitted.destination ?? "",
+                      startDate: submitted.startDate ?? "",
+                      endDate: submitted.endDate ?? "",
+                      budget: parseInt(submitted.budget ?? "0", 10) || 0,
+                      currency: submitted.currency ?? "EUR",
+                      travelers: parseInt(submitted.travelers ?? "1", 10) || 1,
+                      interests: submitted.interests ?? "",
+                    }}
+                    markdown={raw}
+                    places={places}
+                  />
                 </span>
               )}
             </div>

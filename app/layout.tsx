@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import Providers from "@/components/Providers";
 
 // next/font self-hosts and inlines the font CSS, so there is no render-blocking
 // request to a font CDN and no layout shift once the face loads.
@@ -103,7 +104,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

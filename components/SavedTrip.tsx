@@ -1,0 +1,65 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import TripMap, { DayLegend, type Place } from "@/components/TripMap";
+import {
+  ItinerarySection,
+  SectionRail,
+  parseSections,
+} from "@/components/Itinerary";
+import { useActiveSection } from "@/lib/hooks";
+
+/**
+ * Renders a stored itinerary using exactly the same components as the live
+ * planner. Markdown is parsed at read time rather than at save time, so
+ * changing how sections are laid out improves every trip already saved
+ * instead of leaving old ones frozen in the old format.
+ */
+export default function SavedTrip({
+  markdown,
+  places,
+}: {
+  markdown: string;
+  places: Place[];
+}) {
+  const [activeDay, setActiveDay] = useState<number | null>(null);
+
+  const sections = useMemo(() => parseSections(markdown), [markdown]);
+  const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
+  const active = useActiveSection(sectionIds);
+
+  return (
+    <div className="grid gap-10 xl:grid-cols-[190px_minmax(0,1fr)_400px]">
+      <aside className="hidden xl:block">
+        <div className="sticky top-24">
+          <SectionRail sections={sections} active={active} />
+        </div>
+      </aside>
+
+      <article className="min-w-0 space-y-12">
+        {sections.map((s) => (
+          <ItinerarySection key={s.id} section={s} />
+        ))}
+      </article>
+
+      <aside className="order-first xl:order-none">
+        <div className="sticky top-24 space-y-3">
+          {places.length > 0 && (
+            <>
+              <TripMap
+                places={places}
+                activeDay={activeDay}
+                className="h-[300px] xl:h-[calc(100vh-13rem)]"
+              />
+              <DayLegend
+                places={places}
+                activeDay={activeDay}
+                onSelect={setActiveDay}
+              />
+            </>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
