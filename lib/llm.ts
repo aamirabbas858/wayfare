@@ -17,6 +17,12 @@ export interface GenerateOptions {
   system: string;
   user: string;
   signal?: AbortSignal;
+  /**
+   * Caps the completion below the model's own limit. Short passes should ask
+   * for less: free tiers meter tokens per minute, and a request reserves its
+   * stated maximum against that budget whether or not it uses it.
+   */
+  maxTokens?: number;
 }
 
 /**
@@ -223,9 +229,14 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
         // stable across tiers. Rather than pick a conservative constant and
         // permanently give up the longer itineraries, ask for the full budget
         // first and halve it on a 413. A shorter plan beats no plan.
-        const attempts = [spec.maxTokens, Math.floor(spec.maxTokens / 2)].filter(
+        const ceiling = Math.min(spec.maxTokens, opts.maxTokens ?? spec.maxTokens);
+        const budgets = [ceiling, Math.floor(ceiling / 2)].filter(
           (n, i, a) => n >= 1024 && a.indexOf(n) === i
         );
+        // One extra slot so a rate-limit wait can retry the full budget
+        // rather than consuming the halved attempt meant for 413s.
+        const attempts = [budgets[0], ...budgets];
+        let rateLimited = false;
 
         for (const maxTokens of attempts) {
           const model = { ...spec, maxTokens };
@@ -256,6 +267,23 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             // fewer tokens is the one thing that can fix it, so fall through
             // to the next (halved) attempt on this same model.
             if (res.status === 413) continue;
+
+            // 429 on a free tier is usually tokens-per-minute, which clears on
+            // its own. Multi-pass generation hits this routinely: the first
+            // pass succeeds and the rest arrive too quickly. Waiting is the
+            // correct response — moving to another provider throws away a
+            // working one over a limit measured in seconds.
+            if (res.status === 429 && !rateLimited) {
+              rateLimited = true;
+              const after = Number(res.headers.get("retry-after"));
+              const waitMs = Math.min(
+                Number.isFinite(after) && after > 0 ? after * 1000 : 6000,
+                20_000
+              );
+              console.warn(`[llm] ${label} rate limited, waiting ${waitMs}ms`);
+              await new Promise((r) => setTimeout(r, waitMs));
+              continue; // same model, same budget — the limit is time-based
+            }
 
             // A transient or quota failure will not improve with a smaller
             // request — move to the next model.
