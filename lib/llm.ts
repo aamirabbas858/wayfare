@@ -19,13 +19,24 @@ export interface GenerateOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Completion cap per model. Asking for more than a model permits is rejected
+ * with HTTP 413 before any generation happens, so these are correctness
+ * settings rather than tuning — and they differ per model, which is why they
+ * cannot live in one shared constant.
+ */
+interface ModelSpec {
+  id: string;
+  maxTokens: number;
+}
+
 interface Provider {
   name: string;
   /** Present only when the environment supplies a key. */
   enabled: () => boolean;
-  /** Model ids tried in order within this provider. */
-  models: string[];
-  request: (model: string, opts: GenerateOptions) => Promise<Response>;
+  /** Models tried in order within this provider. */
+  models: ModelSpec[];
+  request: (model: ModelSpec, opts: GenerateOptions) => Promise<Response>;
   /** Pulls the incremental text out of one SSE `data:` payload. */
   extract: (parsed: unknown) => string | undefined;
 }
@@ -35,10 +46,14 @@ interface Provider {
 const gemini: Provider = {
   name: "gemini",
   enabled: () => Boolean(process.env.GEMINI_API_KEY),
-  models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"],
+  models: [
+    { id: "gemini-3.5-flash", maxTokens: 8192 },
+    { id: "gemini-3.1-flash-lite", maxTokens: 8192 },
+    { id: "gemini-flash-latest", maxTokens: 8192 },
+  ],
   request: (model, { system, user, signal }) =>
     fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,15 +74,14 @@ const gemini: Provider = {
 const groq: Provider = {
   name: "groq",
   enabled: () => Boolean(process.env.GROQ_API_KEY),
-  // Groq production models only — preview models can be withdrawn at short
-  // notice, which is exactly the fragility this file exists to avoid.
-  // Ordered by output quality: the itinerary is long-form prose, so the
-  // larger models are worth the slower tokens.
-  models: [
-    "llama-3.3-70b-versatile",
-    "openai/gpt-oss-120b",
-    "llama-3.1-8b-instant",
-  ],
+  // Production models only — preview models can be withdrawn at short notice,
+  // which is the fragility this file exists to avoid.
+  //
+  // Probed against the live free-tier account: openai/gpt-oss-120b and
+  // llama-3.1-8b-instant both return 413 for a request this size, so they are
+  // not listed. maxTokens is the completion cap the model accepts, not a
+  // preference — exceeding it is rejected before any generation happens.
+  models: [{ id: "llama-3.3-70b-versatile", maxTokens: 4096 }],
   request: (model, { system, user, signal }) =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -76,10 +90,10 @@ const groq: Provider = {
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model,
+        model: model.id,
         stream: true,
         temperature: 0.7,
-        max_tokens: 8000,
+        max_tokens: model.maxTokens,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -98,8 +112,8 @@ const openrouter: Provider = {
   name: "openrouter",
   enabled: () => Boolean(process.env.OPENROUTER_API_KEY),
   models: [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-3.2-24b-instruct:free",
+    { id: "meta-llama/llama-3.3-70b-instruct:free", maxTokens: 4096 },
+    { id: "mistralai/mistral-small-3.2-24b-instruct:free", maxTokens: 4096 },
   ],
   request: (model, { system, user, signal }) =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -111,9 +125,10 @@ const openrouter: Provider = {
         "X-Title": "Wayfare",
       },
       body: JSON.stringify({
-        model,
+        model: model.id,
         stream: true,
         temperature: 0.7,
+        max_tokens: model.maxTokens,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -161,7 +176,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
         if (!provider.enabled()) continue;
 
         for (const model of provider.models) {
-          const label = `${provider.name}/${model}`;
+          const label = `${provider.name}/${model.id}`;
           let res: Response;
 
           try {
@@ -295,7 +310,7 @@ export async function probeProviders() {
 
         results.push({
           provider: provider.name,
-          model,
+          model: model.id,
           status: res.status,
           ok: res.ok,
           reason: res.ok
@@ -311,7 +326,7 @@ export async function probeProviders() {
       } catch (err) {
         results.push({
           provider: provider.name,
-          model,
+          model: model.id,
           status: "network",
           ok: false,
           reason: (err as Error)?.message?.slice(0, 80) ?? "request failed",
@@ -334,7 +349,7 @@ export function providerStatus() {
       // A length of 0 with configured:false means the variable is missing.
       // A short length usually means a truncated paste.
       keyLength: raw ? raw.length : 0,
-      models: p.models,
+      models: p.models.map((m) => m.id),
     };
   });
 }
