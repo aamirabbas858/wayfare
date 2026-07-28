@@ -19,13 +19,24 @@ export interface GenerateOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Completion cap per model. Asking for more than a model permits is rejected
+ * with HTTP 413 before any generation happens, so these are correctness
+ * settings rather than tuning — and they differ per model, which is why they
+ * cannot live in one shared constant.
+ */
+interface ModelSpec {
+  id: string;
+  maxTokens: number;
+}
+
 interface Provider {
   name: string;
   /** Present only when the environment supplies a key. */
   enabled: () => boolean;
-  /** Model ids tried in order within this provider. */
-  models: string[];
-  request: (model: string, opts: GenerateOptions) => Promise<Response>;
+  /** Models tried in order within this provider. */
+  models: ModelSpec[];
+  request: (model: ModelSpec, opts: GenerateOptions) => Promise<Response>;
   /** Pulls the incremental text out of one SSE `data:` payload. */
   extract: (parsed: unknown) => string | undefined;
 }
@@ -35,10 +46,14 @@ interface Provider {
 const gemini: Provider = {
   name: "gemini",
   enabled: () => Boolean(process.env.GEMINI_API_KEY),
-  models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"],
+  models: [
+    { id: "gemini-3.5-flash", maxTokens: 8192 },
+    { id: "gemini-3.1-flash-lite", maxTokens: 8192 },
+    { id: "gemini-flash-latest", maxTokens: 8192 },
+  ],
   request: (model, { system, user, signal }) =>
     fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model.id}:streamGenerateContent?key=${process.env.GEMINI_API_KEY}&alt=sse`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -59,7 +74,14 @@ const gemini: Provider = {
 const groq: Provider = {
   name: "groq",
   enabled: () => Boolean(process.env.GROQ_API_KEY),
-  models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+  // Production models only — preview models can be withdrawn at short notice,
+  // which is the fragility this file exists to avoid.
+  //
+  // Probed against the live free-tier account: openai/gpt-oss-120b and
+  // llama-3.1-8b-instant both return 413 for a request this size, so they are
+  // not listed. maxTokens is the completion cap the model accepts, not a
+  // preference — exceeding it is rejected before any generation happens.
+  models: [{ id: "llama-3.3-70b-versatile", maxTokens: 4096 }],
   request: (model, { system, user, signal }) =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -68,10 +90,10 @@ const groq: Provider = {
         Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model,
+        model: model.id,
         stream: true,
         temperature: 0.7,
-        max_tokens: 8000,
+        max_tokens: model.maxTokens,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -90,8 +112,8 @@ const openrouter: Provider = {
   name: "openrouter",
   enabled: () => Boolean(process.env.OPENROUTER_API_KEY),
   models: [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-3.2-24b-instruct:free",
+    { id: "meta-llama/llama-3.3-70b-instruct:free", maxTokens: 4096 },
+    { id: "mistralai/mistral-small-3.2-24b-instruct:free", maxTokens: 4096 },
   ],
   request: (model, { system, user, signal }) =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -103,9 +125,10 @@ const openrouter: Provider = {
         "X-Title": "Wayfare",
       },
       body: JSON.stringify({
-        model,
+        model: model.id,
         stream: true,
         temperature: 0.7,
+        max_tokens: model.maxTokens,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -153,7 +176,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
         if (!provider.enabled()) continue;
 
         for (const model of provider.models) {
-          const label = `${provider.name}/${model}`;
+          const label = `${provider.name}/${model.id}`;
           let res: Response;
 
           try {
@@ -245,4 +268,88 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 /** True when at least one provider has credentials — used for health checks. */
 export function hasProvider(): boolean {
   return PROVIDERS.some((p) => p.enabled());
+}
+
+/**
+ * Which providers the running server can actually see, as booleans.
+ *
+ * Deliberately reports only presence and key length — never a key, or any
+ * part of one. Environment variables are baked in at build time on Vercel,
+ * so "I added the variable" and "the running deployment has it" are
+ * different claims, and this is the only way to tell them apart from
+ * outside.
+ */
+/**
+ * Sends a one-token request to every configured model and reports what came
+ * back. Returns status codes and a short reason only — never a response body,
+ * which can carry account details.
+ *
+ * Exists because a failing provider is otherwise only visible in server logs,
+ * and "the key is set" does not imply "the key works with this model".
+ */
+export async function probeProviders() {
+  const results: {
+    provider: string;
+    model: string;
+    status: number | string;
+    ok: boolean;
+    reason: string;
+  }[] = [];
+
+  for (const provider of PROVIDERS) {
+    if (!provider.enabled()) continue;
+
+    for (const model of provider.models) {
+      try {
+        const res = await provider.request(model, {
+          system: "Reply with the single word OK.",
+          user: "ping",
+        });
+        // Release the stream so the connection does not stay open.
+        await res.body?.cancel().catch(() => {});
+
+        results.push({
+          provider: provider.name,
+          model: model.id,
+          status: res.status,
+          ok: res.ok,
+          reason: res.ok
+            ? "reachable"
+            : res.status === 401 || res.status === 403
+            ? "key rejected"
+            : res.status === 404
+            ? "model not found — the id may have been retired"
+            : res.status === 429
+            ? "rate limited or out of quota"
+            : `http ${res.status}`,
+        });
+      } catch (err) {
+        results.push({
+          provider: provider.name,
+          model: model.id,
+          status: "network",
+          ok: false,
+          reason: (err as Error)?.message?.slice(0, 80) ?? "request failed",
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+export function providerStatus() {
+  return PROVIDERS.map((p) => {
+    const envVar = `${p.name.toUpperCase()}_API_KEY`;
+    const raw = process.env[envVar];
+    return {
+      provider: p.name,
+      envVar,
+      configured: p.enabled(),
+      // A length of 0 with configured:false means the variable is missing.
+      // A short length usually means a truncated paste.
+      keyLength: raw ? raw.length : 0,
+      models: p.models.map((m) => m.id),
+    };
+  });
 }

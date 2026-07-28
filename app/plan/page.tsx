@@ -152,11 +152,34 @@ export default function PlanPage() {
           const { done, value } = await reader.read();
           if (done) break;
           acc += decoder.decode(value, { stream: true });
+
+          // The route streams a 200 and reports failures inside the body, so a
+          // provider error arrives as text rather than a bad status. Without
+          // this the page would sit on skeletons forever, waiting for headings
+          // that are never coming.
+          const failure = acc.match(/\[Error:\s*([^\]]+)\]/);
+          if (failure) {
+            await reader.cancel().catch(() => {});
+            setError(failure[1].trim());
+            setPhase("error");
+            return;
+          }
+
           if (first && acc.trim()) {
             setPhase("writing");
             first = false;
           }
           setRaw(acc);
+        }
+
+        // A stream that closed without ever producing a heading is a failure
+        // too, just a quieter one.
+        if (!/^##\s+/m.test(acc)) {
+          setError(
+            "The planner returned an empty response. This usually clears on a retry."
+          );
+          setPhase("error");
+          return;
         }
 
         setPhase("done");

@@ -1,10 +1,58 @@
 import { tavily } from "@tavily/core";
 import { NextRequest } from "next/server";
-import { generateStream, hasProvider } from "@/lib/llm";
+import {
+  generateStream,
+  hasProvider,
+  providerStatus,
+  probeProviders,
+} from "@/lib/llm";
+
+/**
+ * Health check. Reports which providers the running deployment can see, and
+ * whether the search key is present — booleans and key lengths only, never a
+ * key or any fragment of one.
+ *
+ * This exists because Vercel bakes environment variables in at build time,
+ * so "I added the variable" and "the deployment has it" are different
+ * claims. Safe to delete once configuration has settled.
+ */
+export async function GET(request: NextRequest) {
+  // ?probe=1 additionally sends a one-token request to each configured model
+  // and reports the status code, so a bad key or a retired model id can be
+  // diagnosed without server log access.
+  const probe = request.nextUrl.searchParams.get("probe") === "1";
+
+  return Response.json(
+    {
+      ok: hasProvider(),
+      providers: providerStatus(),
+      ...(probe ? { probe: await probeProviders() } : {}),
+      search: {
+        envVar: "TAVILY_API_KEY",
+        configured: Boolean(process.env.TAVILY_API_KEY),
+      },
+      hint: hasProvider()
+        ? "At least one provider is configured."
+        : "No provider key reached this build. In Vercel, confirm the variable is enabled for Production, then redeploy — env vars only apply to new builds.",
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+}
 
 export const maxDuration = 300;
 
 const tavilyClient = tavily({ apiKey: process.env.TAVILY_API_KEY! });
+
+// Search results are the bulk of the prompt, and free-tier providers reject
+// oversized requests outright with HTTP 413. Capping per result and per search
+// keeps the total predictable regardless of how verbose a page happens to be.
+const MAX_RESULT_CHARS = 700;
+const MAX_SEARCH_CHARS = 2200;
+
+function clip(text: string, limit: number): string {
+  const t = text.trim();
+  return t.length <= limit ? t : `${t.slice(0, limit).trimEnd()}…`;
+}
 
 async function executeSearch(query: string): Promise<string> {
   try {
@@ -12,9 +60,10 @@ async function executeSearch(query: string): Promise<string> {
       maxResults: 3,
       searchDepth: "basic",
     });
-    return results.results
-      .map((r) => `${r.title}\n${r.content}`)
+    const joined = results.results
+      .map((r) => `${r.title}\n${clip(r.content ?? "", MAX_RESULT_CHARS)}`)
       .join("\n\n");
+    return clip(joined, MAX_SEARCH_CHARS);
   } catch {
     return `[Search failed for: ${query}]`;
   }
