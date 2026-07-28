@@ -115,6 +115,83 @@ const groq: Provider = {
       ?.content,
 };
 
+/* ── Mistral (OpenAI-compatible) ────────────────────────────────────── */
+
+// The largest free allowance of any provider here by a wide margin: the
+// Experiment tier is metered per month rather than per day, so a burst of
+// testing cannot exhaust an afternoon's worth of traffic the way Groq's
+// 100,000 tokens per day can. Sign-up needs phone verification, not a card.
+const mistral: Provider = {
+  name: "mistral",
+  enabled: () => Boolean(process.env.MISTRAL_API_KEY),
+  models: [
+    { id: "mistral-large-latest", maxTokens: 8192 },
+    { id: "mistral-small-latest", maxTokens: 8192 },
+  ],
+  request: (model, { system, user, signal }) =>
+    fetch("https://api.mistral.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model.id,
+        stream: true,
+        temperature: 0.7,
+        max_tokens: model.maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      signal,
+    }),
+  extract: (d) =>
+    (d as { choices?: { delta?: { content?: string } }[] })?.choices?.[0]?.delta
+      ?.content,
+};
+
+/* ── NVIDIA NIM (OpenAI-compatible) ─────────────────────────────────── */
+
+// Metered by requests per minute rather than a daily token allowance, which
+// makes it the useful complement to the others: a long itinerary is a handful
+// of large requests, which is exactly the shape this tier is generous about.
+//
+// Model IDs are taken from a live read of the /v1/models endpoint rather than
+// documentation. llama-3.3-70b leads because it is the same model the prompt
+// was tuned against on Groq, so output shape does not change on failover.
+const nvidia: Provider = {
+  name: "nvidia",
+  enabled: () => Boolean(process.env.NVIDIA_API_KEY),
+  models: [
+    { id: "meta/llama-3.3-70b-instruct", maxTokens: 8192 },
+    { id: "nvidia/llama-3.3-nemotron-super-49b-v1.5", maxTokens: 8192 },
+  ],
+  request: (model, { system, user, signal }) =>
+    fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: model.id,
+        stream: true,
+        temperature: 0.7,
+        max_tokens: model.maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+      signal,
+    }),
+  extract: (d) =>
+    (d as { choices?: { delta?: { content?: string } }[] })?.choices?.[0]?.delta
+      ?.content,
+};
+
 /* ── OpenRouter (OpenAI-compatible, optional) ───────────────────────── */
 
 const openrouter: Provider = {
@@ -150,8 +227,22 @@ const openrouter: Provider = {
       ?.content,
 };
 
-/** Free tiers first, so paid credit is only spent when they are exhausted. */
-const PROVIDERS: Provider[] = [groq, gemini, openrouter];
+/**
+ * Ordered by how much free headroom each one has, largest first, so the
+ * providers that can absorb a bad afternoon are used before the ones that
+ * cannot.
+ *
+ * Measured, not assumed. Groq's free tier is 100,000 tokens per DAY — around
+ * eight itineraries shared between every visitor — which is why it can no
+ * longer lead. Mistral's Experiment tier is metered monthly and is roughly
+ * three orders of magnitude larger; NVIDIA meters requests per minute with no
+ * published daily token cap. Groq stays in the chain because it is by far the
+ * fastest when it has budget left.
+ *
+ * Gemini is last because its prepaid balance is empty, and an empty balance
+ * does not refill on its own the way a daily allowance does.
+ */
+const PROVIDERS: Provider[] = [mistral, nvidia, groq, openrouter, gemini];
 
 /** Status codes worth trying the next model or provider for. */
 const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
