@@ -227,7 +227,16 @@ Stop after "Local transit". Do not continue past it.`;
     // and the failure is silent — the model stops and the reader thinks the
     // plan is finished. Days are generated in blocks so trip length stops
     // being a constraint.
-    const DAYS_PER_PASS = 4;
+    // Measured against real output: a day is roughly 190 characters per stop,
+    // so twelve days at four stops is about 2,300 tokens. That fits one
+    // completion comfortably. The original failure was not that days are
+    // large — it was that all fifteen sections shared a single budget and the
+    // earlier ones ate it, leaving the itinerary to stop at day two.
+    //
+    // Splitting every four days therefore fixed the wrong thing and cost six
+    // requests where three will do. Free tiers meter requests as well as
+    // tokens, so fewer passes is the difference between working and 429.
+    const DAYS_PER_PASS = 12;
     const dayBlocks: Array<[number, number]> = [];
     for (let d = 1; d <= days; d += DAYS_PER_PASS) {
       dayBlocks.push([d, Math.min(d + DAYS_PER_PASS - 1, days)]);
@@ -301,10 +310,16 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
     // its stated maximum against a free tier's tokens-per-minute allowance
     // whether it uses it or not, so asking for 8192 on a four-day block was
     // spending the allowance on nothing.
+    // Sized from measured output rather than guessed: ~55 tokens per stop,
+    // plus headroom. A three-day trip does not reserve a fortnight's budget.
+    const daysInBlock = (from: number, to: number) => to - from + 1;
+    const dayBudget = ([from, to]: [number, number]) =>
+      Math.min(6000, 400 + daysInBlock(from, to) * (days <= 5 ? 340 : 260));
+
     const passes: Array<{ user: string; maxTokens: number }> = [
-      { user: partOne, maxTokens: 4096 },
-      ...dayParts.map((user) => ({ user, maxTokens: 2048 })),
-      { user: partThree, maxTokens: 3072 },
+      { user: partOne, maxTokens: 3000 },
+      ...dayParts.map((user, i) => ({ user, maxTokens: dayBudget(dayBlocks[i]) })),
+      { user: partThree, maxTokens: 2400 },
     ];
 
     const stream = generateSequence(
