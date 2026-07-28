@@ -31,12 +31,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Length caps: these fields are interpolated into search queries and the
+    // prompt, so unbounded input means unbounded token spend on my API keys.
+    const field = (v: unknown, max: number) => String(v).slice(0, max).trim();
+    const dest       = field(destination, 80);
+    const orig       = field(origin, 80);
+    const interestsT = field(interests, 500);
+
     const days = Math.ceil(
       (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)
     );
-    if (days <= 0) {
+    if (!Number.isFinite(days) || days <= 0 || days > 60) {
       return new Response(
-        JSON.stringify({ error: "End date must be after start date." }),
+        JSON.stringify({ error: "End date must be after start date (trips up to 60 days)." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const budgetNum = parseInt(String(budget), 10);
+    if (!Number.isFinite(budgetNum) || budgetNum < 1 || budgetNum > 1_000_000) {
+      return new Response(
+        JSON.stringify({ error: "Budget must be a number between 1 and 1,000,000." }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -45,16 +60,16 @@ export async function POST(request: NextRequest) {
     const year = new Date(startDate).getFullYear();
     const month = new Date(startDate).toLocaleString("default", { month: "long" });
 
-    const numTravelers = parseInt(travelers || "1");
-    const dailyPerPerson = Math.round(parseInt(budget) / numTravelers / days);
+    const numTravelers = Math.min(Math.max(parseInt(String(travelers || "1"), 10) || 1, 1), 20);
+    const dailyPerPerson = Math.round(budgetNum / numTravelers / days);
 
     // Predefined searches — run in parallel for speed and reliability
     const travelerSuffix = numTravelers > 1 ? ` for ${numTravelers} people` : "";
     const searchQueries = [
-      `${origin} to ${destination} flights ${month} ${year}${numTravelers > 1 ? ` ${numTravelers} passengers` : ""}`,
-      `${destination} public transport day pass week pass price ${year}`,
-      `${destination} budget accommodation hostels hotels ${month} ${year} prices${travelerSuffix}`,
-      `${destination} top attractions entrance fees opening hours ${year}`,
+      `${orig} to ${dest} flights ${month} ${year}${numTravelers > 1 ? ` ${numTravelers} passengers` : ""}`,
+      `${dest} public transport day pass week pass price ${year}`,
+      `${dest} budget accommodation hostels hotels ${month} ${year} prices${travelerSuffix}`,
+      `${dest} top attractions entrance fees opening hours ${year}`,
     ];
 
     const searchResults = await Promise.all(
@@ -66,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     const searchContext = searchResults.join("\n\n---\n\n");
 
-    const systemPrompt = `You are an experienced, honest travel planner who has LIVED in ${destination} for years. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler.
+    const systemPrompt = `You are an experienced, honest travel planner who has LIVED in ${dest} for years. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler.
 
 CRITICAL RULES:
 1. Use REAL current prices from the search results provided. Never write "around" or "approximately".
@@ -78,12 +93,12 @@ CRITICAL RULES:
 7. For FOOD COSTS, always anchor on what a budget traveler actually eats: local market lunches, daily specials (prato do dia / plat du jour / menu del día), supermarkets, street food. These cost €5-15/day in cheap cities and €15-25/day in expensive ones. Do NOT use tourist restaurant menu prices as the food budget — they are irrelevant to a budget traveler.`;
 
     const userPrompt = `Trip details:
-- Traveler departing from: ${origin}
-- Destination: ${destination}
+- Traveler departing from: ${orig}
+- Destination: ${dest}
 - Travel dates: ${startDate} to ${endDate} (${days} days)
 - Group size: ${travelers} traveler(s)
-- Total budget: €${budget}
-- What they want: ${interests}
+- Total budget: €${budgetNum}
+- What they want: ${interestsT}
 
 Today's date: ${today}
 
@@ -96,12 +111,12 @@ ${searchContext}
 Now deliver a complete travel plan with this EXACT structure:
 
 ## The Essentials
-3 sentences, no budget discussion: (1) The single most time-sensitive booking for this specific trip and exactly why it needs to go TODAY; (2) the single most important local rule or watch-out in ${destination} that catches first-time visitors off guard; (3) one practical tip specific to ${destination} that guidebooks don't mention.
+3 sentences, no budget discussion: (1) The single most time-sensitive booking for this specific trip and exactly why it needs to go TODAY; (2) the single most important local rule or watch-out in ${dest} that catches first-time visitors off guard; (3) one practical tip specific to ${dest} that guidebooks don't mention.
 
 ## Reality check
 Show the arithmetic on one line, then give the verdict:
-"€${dailyPerPerson}/day per person. Cheapest viable day in ${destination}: hostel €[X]/night + street food €[Y]/day + transit €[Z]/day = €[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
-Then one sentence: the single most important current gotcha for ${destination} (seasonal price spike, closed attraction, booking requirement). Nothing else.
+"€${dailyPerPerson}/day per person. Cheapest viable day in ${dest}: hostel €[X]/night + street food €[Y]/day + transit €[Z]/day = €[total]/day minimum. [Your budget covers this / barely covers this / does not cover this], so this trip is [comfortable / tight / over budget]."
+Then one sentence: the single most important current gotcha for ${dest} (seasonal price spike, closed attraction, booking requirement). Nothing else.
 
 ## Book today
 Items to book NOW — flights, transit passes, popular reservations.
@@ -115,13 +130,13 @@ Line-by-line per-person costs using the cheapest realistic options from search r
   - Activities: named places with real entrance fees
   - Buffer: 10% of subtotal
 Show running total. Then one of:
-  • If total < €${budget} × 0.85 → "BUDGET VERDICT: Comfortable — €X surplus, no stress needed."
-  • If total < €${budget} → "BUDGET VERDICT: Workable — €X surplus, keep an eye on food spend."
-  • If total > €${budget} → "BUDGET VERDICT: Over budget by €X — suggest [specific cut]."
+  • If total < €${budgetNum} × 0.85 → "BUDGET VERDICT: Comfortable — €X surplus, no stress needed."
+  • If total < €${budgetNum} → "BUDGET VERDICT: Workable — €X surplus, keep an eye on food spend."
+  • If total > €${budgetNum} → "BUDGET VERDICT: Over budget by €X — suggest [specific cut]."
 The verdict lives here, not in The Essentials.
 
 ## Getting there
-From ${origin} → ${destination}. Use flight prices from the searches. Cheapest day, cheapest airline. Airport-to-city transfer with exact transit info.
+From ${orig} → ${dest}. Use flight prices from the searches. Cheapest day, cheapest airline. Airport-to-city transfer with exact transit info.
 
 ## Where to stay
 3 NAMED options at different price points using the accommodation search results. Skip if user mentions staying with friends.
@@ -181,8 +196,12 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
               }),
             });
             if (resp.ok) { geminiResp = resp; break; }
-            if (resp.status !== 503) {
-              throw new Error(`Gemini ${resp.status}: ${await resp.text()}`);
+            // 429/500/503 are transient or per-model — try the next model.
+            // Anything else is a real failure; log the detail server-side but
+            // never stream the upstream error body to the client.
+            if (![429, 500, 503].includes(resp.status)) {
+              console.error(`Gemini ${model} ${resp.status}:`, await resp.text());
+              throw new Error("The planning service rejected the request. Please try again.");
             }
           }
           if (!geminiResp) throw new Error("All Gemini models temporarily unavailable. Please try again in a moment.");
