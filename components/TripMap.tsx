@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -36,11 +36,17 @@ export default function TripMap({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
-  const markers = useRef<mapboxgl.Marker[]>([]);
+  // Kept alongside the day so highlighting can restyle a marker in place
+  // rather than tearing the whole set down and rebuilding it.
+  const markers = useRef<{ marker: mapboxgl.Marker; el: HTMLElement; day: number }[]>([]);
   const [ready, setReady] = useState(false);
 
-  const valid = places.filter(
-    (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)
+  // Memoised on the place list itself. Filtering inline produced a new array
+  // identity on every render, which made the marker effect's dependencies
+  // churn and stopped highlight changes from being applied reliably.
+  const valid = useMemo(
+    () => places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)),
+    [places]
   );
 
   /* Create the map once, then reuse it. Rebuilding on every render would
@@ -72,20 +78,19 @@ export default function TripMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valid.length]);
 
-  /* Markers are rebuilt when the place list or the highlighted day changes. */
+  /* Markers are built only when the place list changes. Highlighting is a
+     separate effect that restyles them, so selecting a day never destroys and
+     recreates DOM — which is both cheaper and avoids the popup closing. */
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
 
-    markers.current.forEach((mk) => mk.remove());
+    markers.current.forEach(({ marker }) => marker.remove());
     markers.current = [];
-
-    const bounds = new mapboxgl.LngLatBounds();
 
     valid.forEach((place) => {
       const day = Math.max(1, Math.floor(place.day || 1));
       const color = dayColor(day);
-      const dimmed = activeDay !== null && day !== activeDay;
 
       const el = document.createElement("div");
       el.className = "wf-marker";
@@ -95,9 +100,7 @@ export default function TripMap({
         border: 2.5px solid var(--surface-raised, #fff);
         box-shadow: 0 2px 8px rgba(0,0,0,0.4);
         cursor: pointer;
-        opacity: ${dimmed ? 0.28 : 1};
-        transform: scale(${dimmed ? 0.8 : 1});
-        transition: opacity .25s ease, transform .25s ease;
+        transition: opacity .25s ease, filter .25s ease;
       `;
       el.setAttribute("role", "img");
       el.setAttribute("aria-label", `${place.name}, day ${day}`);
@@ -133,10 +136,38 @@ export default function TripMap({
         )
         .addTo(m);
 
-      markers.current.push(marker);
-      if (!dimmed) bounds.extend([place.lng, place.lat]);
+      markers.current.push({ marker, el, day });
     });
+  }, [valid, ready]);
 
+  /* Highlighting. Writes directly to each marker element, so a day selection
+     is a style change rather than a teardown. Scaling is done with a filter
+     rather than a transform, because Mapbox owns the element's transform for
+     positioning and overwriting it would fling markers off the map. */
+  useEffect(() => {
+    if (!ready) return;
+
+    for (const { el, day } of markers.current) {
+      const dimmed = activeDay !== null && day !== activeDay;
+      el.style.opacity = dimmed ? "0.25" : "1";
+      el.style.filter = dimmed ? "grayscale(0.6)" : "none";
+      el.style.zIndex = dimmed ? "0" : "1";
+    }
+
+    // Reframe to whatever is highlighted, so picking a day actually takes you
+    // there rather than leaving you looking at the whole city.
+    const m = map.current;
+    if (!m) return;
+
+    const shown = valid.filter(
+      (p) =>
+        activeDay === null ||
+        Math.max(1, Math.floor(p.day || 1)) === activeDay
+    );
+    if (!shown.length) return;
+
+    const bounds = new mapboxgl.LngLatBounds();
+    shown.forEach((p) => bounds.extend([p.lng, p.lat]));
     if (!bounds.isEmpty()) {
       m.fitBounds(bounds, {
         padding: { top: 60, bottom: 60, left: 50, right: 50 },
@@ -144,7 +175,7 @@ export default function TripMap({
         duration: 700,
       });
     }
-  }, [valid, activeDay, ready]);
+  }, [activeDay, valid, ready]);
 
   /* Follow the site theme without tearing down the map instance. */
   useEffect(() => {

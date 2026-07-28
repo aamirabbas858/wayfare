@@ -12,6 +12,13 @@ import {
   type Section,
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
+import {
+  CURRENCIES,
+  DEFAULT_CURRENCY,
+  formatAmount,
+  resolveCurrency,
+  type CurrencyCode,
+} from "@/lib/currency";
 
 type Phase = "form" | "researching" | "writing" | "done" | "error";
 
@@ -39,6 +46,9 @@ export default function PlanPage() {
   const [travelers, setTravelers] = useState("1");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_CURRENCY);
+
+  const cur = resolveCurrency(currency);
 
   const abortRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -273,25 +283,50 @@ export default function PlanPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2">
-                <Field label="Total budget" hint="Euros, for everyone">
+              <div className="grid gap-5 sm:grid-cols-[1fr_auto_auto]">
+                <Field label="Total budget" hint="For everyone, whole trip">
                   <div className="relative">
-                    <span className="tnum pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint">
-                      €
+                    <span
+                      className="tnum pointer-events-none absolute left-4 top-1/2
+                                 -translate-y-1/2 text-faint"
+                    >
+                      {cur.symbol}
                     </span>
                     <input
                       type="number"
                       name="budget"
                       required
-                      min={50}
-                      step={50}
+                      min={1}
+                      step={10}
                       placeholder="600"
                       value={budget}
                       onChange={(e) => setBudget(e.target.value)}
-                      className={`${INPUT} tnum pl-9`}
+                      className={`${INPUT} tnum`}
+                      style={{ paddingLeft: `${2.2 + cur.symbol.length * 0.55}rem` }}
                     />
                   </div>
                 </Field>
+
+                <Field label="Currency">
+                  <select
+                    name="currency"
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value as CurrencyCode)}
+                    className={`${INPUT} cursor-pointer pr-9 appearance-none
+                                bg-[length:0.7rem] bg-[right_0.9rem_center] bg-no-repeat`}
+                    style={{
+                      backgroundImage:
+                        "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E\")",
+                    }}
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} · {c.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
                 <Field label="Travellers">
                   <input
                     type="number"
@@ -301,7 +336,7 @@ export default function PlanPage() {
                     max={20}
                     value={travelers}
                     onChange={(e) => setTravelers(e.target.value)}
-                    className={`${INPUT} tnum`}
+                    className={`${INPUT} tnum w-24`}
                   />
                 </Field>
               </div>
@@ -315,7 +350,7 @@ export default function PlanPage() {
                     <span className="text-[0.84rem] text-faint">
                       That is
                       <span className="tnum mx-1.5 text-[1.05rem] font-semibold text-foreground">
-                        €{perDay}
+                        {formatAmount(perDay, currency)}
                       </span>
                       per person, per day
                     </span>
