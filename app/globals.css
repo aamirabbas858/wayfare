@@ -4,12 +4,64 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ═══════════════════════════════════════════════════════════════════════
+   WAYFARE — DESIGN TOKENS
+
+   Direction: "Field Guide". The product's voice is an honest local, not a
+   travel brochure, so the visual language borrows from maps, transit
+   signage and printed guidebooks rather than stock photography.
+
+   Every price, time and distance is set in mono with tabular figures. The
+   product's whole claim is that its numbers are real; the typography
+   should back that up rather than undercut it.
+   ══════════════════════════════════════════════════════════════════════ */
+
 @theme inline {
+  /* Brand scale ------------------------------------------------------- */
+  --color-ink-950: #070C0B;
+  --color-ink-900: #0B1211;
+  --color-ink-850: #101917;
+  --color-ink-800: #16211F;
+  --color-ink-700: #1E2C29;
+  --color-ink-600: #2A3B37;
+
+  --color-paper-50:  #FDFCFA;
+  --color-paper-100: #F5F2EC;
+  --color-paper-200: #EBE6DC;
+  --color-paper-300: #DCD5C7;
+
+  --color-signal-400: #F07B57;
+  --color-signal-500: #E4572E;
+  --color-signal-600: #C4421D;
+
+  --color-sage-400: #7FB09A;
+  --color-sage-500: #4E8F73;
+
+  /* Day markers. Ordered so adjacent days stay distinguishable, and each
+     holds up against both the dark map and the paper background. */
+  --color-day-1: #E4572E;
+  --color-day-2: #E8A33D;
+  --color-day-3: #4E8F73;
+  --color-day-4: #3E8EA8;
+  --color-day-5: #6C6BAF;
+  --color-day-6: #B85C8A;
+  --color-day-7: #C4762E;
+  --color-day-8: #3F8F8A;
+
+  /* Semantic ---------------------------------------------------------- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --color-faint: var(--faint);
+
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-fraunces);
+  --font-mono: var(--font-jetbrains);
+  --font-heading: var(--font-fraunces);
+
+  /* shadcn compatibility — the existing ui/ components read these. */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,11 +70,6 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -39,92 +86,294 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+
+  /* Motion. One easing for entrances, one for reversible transitions, one
+     springy for interface feedback. */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* ── Light (paper) ───────────────────────────────────────────────────── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #F5F2EC;
+  --foreground: #0B1211;
+  --surface: #FDFCFA;
+  --surface-raised: #FFFFFF;
+  --hairline: rgba(11, 18, 17, 0.10);
+  --faint: rgba(11, 18, 17, 0.55);
+
+  --card: #FDFCFA;
+  --card-foreground: #0B1211;
+  --popover: #FDFCFA;
+  --popover-foreground: #0B1211;
+  --primary: #0B1211;
+  --primary-foreground: #F5F2EC;
+  --secondary: #EBE6DC;
+  --secondary-foreground: #0B1211;
+  --muted: #EBE6DC;
+  --muted-foreground: rgba(11, 18, 17, 0.55);
+  --accent: #E4572E;
+  --accent-foreground: #FFFFFF;
+  --destructive: #C4421D;
+  --border: rgba(11, 18, 17, 0.10);
+  --input: rgba(11, 18, 17, 0.14);
+  --ring: rgba(228, 87, 46, 0.45);
+  --radius: 12px;
+
+  --sidebar: #FDFCFA;
+  --sidebar-foreground: #0B1211;
+  --sidebar-primary: #0B1211;
+  --sidebar-primary-foreground: #F5F2EC;
+  --sidebar-accent: #EBE6DC;
+  --sidebar-accent-foreground: #0B1211;
+  --sidebar-border: rgba(11, 18, 17, 0.10);
+  --sidebar-ring: rgba(228, 87, 46, 0.45);
 }
 
+/* ── Dark (night map) ────────────────────────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0B1211;
+  --foreground: #F1EEE8;
+  --surface: #101917;
+  --surface-raised: #16211F;
+  --hairline: rgba(241, 238, 232, 0.10);
+  --faint: rgba(241, 238, 232, 0.55);
+
+  --card: #101917;
+  --card-foreground: #F1EEE8;
+  --popover: #16211F;
+  --popover-foreground: #F1EEE8;
+  --primary: #F1EEE8;
+  --primary-foreground: #0B1211;
+  --secondary: #1E2C29;
+  --secondary-foreground: #F1EEE8;
+  --muted: #16211F;
+  --muted-foreground: rgba(241, 238, 232, 0.55);
+  --accent: #E4572E;
+  --accent-foreground: #FFFFFF;
+  --destructive: #F07B57;
+  --border: rgba(241, 238, 232, 0.10);
+  --input: rgba(241, 238, 232, 0.16);
+  --ring: rgba(228, 87, 46, 0.55);
+
+  --sidebar: #101917;
+  --sidebar-foreground: #F1EEE8;
+  --sidebar-primary: #F1EEE8;
+  --sidebar-primary-foreground: #0B1211;
+  --sidebar-accent: #1E2C29;
+  --sidebar-accent-foreground: #F1EEE8;
+  --sidebar-border: rgba(241, 238, 232, 0.10);
+  --sidebar-ring: rgba(228, 87, 46, 0.55);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BASE
+   ══════════════════════════════════════════════════════════════════════ */
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
+  * { @apply border-border; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
-  html {
-    @apply font-sans;
+
+  /* Visible, consistent focus. Never removed — only restyled. */
+  :focus-visible {
+    outline: 2px solid var(--color-signal-500);
+    outline-offset: 3px;
+    border-radius: 4px;
   }
+
+  ::selection {
+    background: var(--color-signal-500);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--hairline);
+    border-radius: 99px;
+    border: 3px solid var(--background);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ══════════════════════════════════════════════════════════════════════ */
+
+.display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 0, "WONK" 0;
+  letter-spacing: -0.025em;
+  line-height: 0.94;
+  text-wrap: balance;
+}
+
+.eyebrow {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* Numbers must line up in columns. */
+.tnum {
+  font-family: var(--font-jetbrains), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.prose-measure { max-width: 68ch; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOTION
+   Entrances animate opacity and transform only, so they stay on the
+   compositor and hold 60fps.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@keyframes rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes sweep {
+  from { transform: translate3d(-100%, 0, 0); }
+  to   { transform: translate3d(200%, 0, 0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.82); }
+}
+
+.animate-rise { animation: rise 0.62s var(--ease-out-quint) both; }
+.animate-fade { animation: fade 0.5s var(--ease-out-quint) both; }
+.animate-pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+
+/* Staggered reveals, applied as a data attribute so markup stays readable. */
+[data-stagger] > * { animation: rise 0.62s var(--ease-out-quint) both; }
+[data-stagger] > *:nth-child(1) { animation-delay: 0.04s; }
+[data-stagger] > *:nth-child(2) { animation-delay: 0.10s; }
+[data-stagger] > *:nth-child(3) { animation-delay: 0.16s; }
+[data-stagger] > *:nth-child(4) { animation-delay: 0.22s; }
+[data-stagger] > *:nth-child(5) { animation-delay: 0.28s; }
+[data-stagger] > *:nth-child(6) { animation-delay: 0.34s; }
+[data-stagger] > *:nth-child(7) { animation-delay: 0.40s; }
+[data-stagger] > *:nth-child(8) { animation-delay: 0.46s; }
+
+/* Scroll-triggered reveal, driven by IntersectionObserver in useReveal(). */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+  transition:
+    opacity 0.7s var(--ease-out-quint),
+    transform 0.7s var(--ease-out-quint);
+}
+.reveal[data-visible="true"] { opacity: 1; transform: none; }
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--muted);
+  border-radius: var(--radius-md);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translate3d(-100%, 0, 0);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 8%, transparent),
+    transparent
+  );
+  animation: sweep 1.6s infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SURFACES
+   ══════════════════════════════════════════════════════════════════════ */
+
+.hairline { border: 1px solid var(--hairline); }
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+}
+
+/* Used only where content sits over the map or hero canvas — the one place
+   a blur genuinely aids legibility rather than decorating. */
+.glass {
+  background: color-mix(in oklab, var(--surface) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--hairline);
+}
+
+/* Faint cartographic grid — background texture for dark sections. */
+.map-grid {
+  background-image:
+    linear-gradient(color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 4%, transparent) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Mapbox popups inherit the product's surface treatment rather than the
+   library default. */
+.mapboxgl-popup-content {
+  background: var(--surface-raised) !important;
+  color: var(--foreground) !important;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--hairline) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24) !important;
+  padding: 10px 13px !important;
+  font-family: var(--font-manrope), sans-serif !important;
+}
+.mapboxgl-popup-tip {
+  border-top-color: var(--surface-raised) !important;
+  border-bottom-color: var(--surface-raised) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   Animation is decoration here; no content depends on it.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
 }
