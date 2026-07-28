@@ -13,6 +13,7 @@ import {
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
 import { reconcileBudget } from "@/lib/budget";
+import { splitMapData } from "@/lib/itinerary";
 import SaveTrip from "@/components/SaveTrip";
 import {
   CURRENCIES,
@@ -86,34 +87,7 @@ export default function PlanPage() {
   const { sections, places } = useMemo(() => {
     if (!raw) return { sections: [] as Section[], places: [] as Place[] };
 
-    const cuts = [
-      raw.indexOf("```json"),
-      raw.search(/##\s*Map\s+[Dd]ata/),
-      raw.search(/\n\[\s*\{[^[]*"lat"/),
-    ].filter((i) => i > 0);
-
-    const cut = cuts.length ? Math.min(...cuts) : raw.length;
-    const prose = raw.slice(0, cut).trim();
-    const tail = raw.slice(cut);
-
-    let parsed: Place[] = [];
-    const fenced = tail.match(/```json\s*([\s\S]+?)```/);
-    const bare = tail.match(/(\[\s*\{[\s\S]*"lat"[\s\S]*\}\s*\])/);
-    const json = fenced?.[1] ?? bare?.[1];
-
-    if (json) {
-      try {
-        const p = JSON.parse(json);
-        if (Array.isArray(p)) {
-          parsed = p.filter(
-            (x) => x && Number.isFinite(x.lat) && Number.isFinite(x.lng)
-          );
-        }
-      } catch {
-        /* Still streaming, or the model produced invalid JSON. The prose is
-           the product; the map is an enhancement, so failing here is quiet. */
-      }
-    }
+    const { prose, places: parsed } = splitMapData(raw);
 
     // Reconciled against the budget that was actually submitted, not the
     // live form state — editing a field after generating must not silently

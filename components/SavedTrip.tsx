@@ -9,6 +9,7 @@ import {
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
 import { reconcileBudget } from "@/lib/budget";
+import { splitMapData } from "@/lib/itinerary";
 
 /**
  * Renders a stored itinerary using exactly the same components as the live
@@ -29,11 +30,18 @@ export default function SavedTrip({
 }) {
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
-  // Totals are recomputed here rather than trusted from the stored markdown,
-  // so trips saved before the arithmetic was fixed are corrected on the way
-  // to the screen instead of keeping a wrong total forever.
+  // Markdown is stored verbatim, so the trailing map-data JSON is still in it
+  // and has to be cut off here exactly as the live planner does — leaving it
+  // in rendered the raw array on the page under a "Map data" heading.
+  //
+  // Totals are recomputed rather than trusted from the stored text, so trips
+  // saved before the arithmetic was fixed are corrected on the way to the
+  // screen instead of keeping a wrong total forever.
   const sections = useMemo(
-    () => parseSections(reconcileBudget(markdown, budget, currency)),
+    () =>
+      parseSections(
+        reconcileBudget(splitMapData(markdown).prose, budget, currency)
+      ),
     [markdown, budget, currency]
   );
   const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
