@@ -118,7 +118,13 @@ export async function POST(request: NextRequest) {
       })
     );
 
+    // Passes get only the searches they need. Resending all four to every
+    // pass was the main reason multi-pass generation tripped Groq's
+    // tokens-per-minute limit: the day blocks were carrying flight and hotel
+    // results they never refer to.
     const searchContext = searchResults.join("\n\n---\n\n");
+    const placesContext = searchResults[3] ?? "";   // attractions and fees
+    const transitContext = searchResults[1] ?? "";  // passes and validation
 
     const systemPrompt = `You are an experienced, honest travel planner who has LIVED in ${dest} for years. You give zero-bullshit advice — no sugarcoating, no over-hyping, no "immerse yourself in the vibrant culture" filler.
 
@@ -133,7 +139,7 @@ CRITICAL RULES:
 8. ${conversion}
 9. FORMATTING: use real line breaks. Never run several labelled items together in one paragraph. If a section asks for a list, emit a markdown list, one item per line.`;
 
-    const sharedContext = `Trip details:
+    const tripFacts = `Trip details:
 - Traveller departing from: ${orig}
 - Destination: ${dest}
 - Travel dates: ${startDate} to ${endDate} (${days} days)
@@ -141,13 +147,30 @@ CRITICAL RULES:
 - Total budget: ${cur.symbol}${budgetNum} (${cur.code})
 - What they want: ${interestsT}
 
-Today's date: ${today}
+Today's date: ${today}`;
+
+    // Full research for the overview; only what is relevant for the rest.
+    const overviewContext = `${tripFacts}
 
 Researched information, use it rather than recalling from memory:
 
 ${searchContext}`;
 
-    const partOne = `${sharedContext}
+    const dayContext = `${tripFacts}
+
+Attractions, opening hours and prices researched for this trip:
+
+${placesContext}
+
+${transitContext}`;
+
+    const closingContext = `${tripFacts}
+
+Researched information:
+
+${placesContext}`;
+
+    const partOne = `${overviewContext}
 
 ---
 
@@ -214,7 +237,7 @@ Stop after "Local transit". Do not continue past it.`;
     // readable and affordable rather than being cut off half way.
     const stopsPerDay = days <= 5 ? "4-6" : days <= 10 ? "3-5" : "3-4";
 
-    const dayParts = dayBlocks.map(([from, to], i) => `${sharedContext}
+    const dayParts = dayBlocks.map(([from, to], i) => `${dayContext}
 
 ---
 
@@ -234,7 +257,7 @@ time — place name + neighbourhood (nearest transit stop). Real price. One hone
 
 Keep every stop inside days ${from}-${to}. Do not write any other section. Do not summarise.`);
 
-    const partThree = `${sharedContext}
+    const partThree = `${closingContext}
 
 ---
 
@@ -274,10 +297,21 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
     // One pass for the overview, one per block of days, one for the closing
     // sections. Each falls through Groq → Gemini → OpenRouter independently,
     // so an exhausted quota part-way still leaves the earlier passes intact.
+    // Budgets are sized to what each pass actually writes. A request reserves
+    // its stated maximum against a free tier's tokens-per-minute allowance
+    // whether it uses it or not, so asking for 8192 on a four-day block was
+    // spending the allowance on nothing.
+    const passes: Array<{ user: string; maxTokens: number }> = [
+      { user: partOne, maxTokens: 4096 },
+      ...dayParts.map((user) => ({ user, maxTokens: 2048 })),
+      { user: partThree, maxTokens: 3072 },
+    ];
+
     const stream = generateSequence(
-      [partOne, ...dayParts, partThree].map((user) => ({
+      passes.map(({ user, maxTokens }) => ({
         system: systemPrompt,
         user,
+        maxTokens,
         signal: request.signal,
       }))
     );
