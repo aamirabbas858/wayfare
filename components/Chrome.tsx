@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/lib/hooks";
+import UserMenu from "@/components/UserMenu";
 
 /** The wordmark, used in the nav and the footer. */
 export function Wordmark({ className = "" }: { className?: string }) {
@@ -79,6 +80,7 @@ export function Nav({ cta = true }: { cta?: boolean }) {
 
         <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
+          <UserMenu />
           {cta && (
             <Link
               href="/plan"
