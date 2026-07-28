@@ -1,151 +1,195 @@
-# wayfare
+# Wayfare
 
-A travel planner that gives honest, current advice instead of the generic stuff every other AI travel app spits out.
+**A travel planner that tells you what a trip actually costs — including what to skip.**
 
-**Live demo:** https://wayfare-xi.vercel.app
+Live: **https://wayfare-xi.vercel.app** · No account needed to use it.
+
+---
 
 ## The idea
 
-I got annoyed with how every AI travel assistant gives you the same vague recommendations. ChatGPT tells you to "immerse yourself in the local culture" and visit "popular landmarks." It can't tell you what an Oyster card actually costs in London right now, or that the Pergamon Museum in Berlin is half-closed for renovation, or that you'll get your phone snatched if you stand on a Shoreditch curb with it out.
+Every AI travel assistant gives you the same vague recommendations. Immerse
+yourself in the local culture. Visit the popular landmarks. None of them can
+tell you what a Navegante pass costs in Lisbon this month, or that Pink Street
+after 22:00 is four bars of overpriced sangria and a queue.
 
-So I built wayfare. It uses an LLM with real-time web search to give you:
+I tried Wonderplan, Layla, Mindtrip and ChatGPT before building this. They all
+do roughly the same thing: a pretty UI wrapped around generic LLM output.
 
-- Real current prices for flights, hostels, and transit (looked up live, not pulled from training data)
-- Named restaurants and cafes with actual addresses, not "try some local food"
-- Safety briefings with specific pickpocket hotspots
-- Local quirks (which side of the escalator to stand on, exact tipping etiquette)
-- Honest budget checks that say "this isn't realistic" when it isn't
-- A map with day-color-coded pins so you can see where everything is
+Wayfare researches live prices before it writes anything, then produces an
+itinerary that argues — named places, real fees, transit stops, and an honest
+verdict on whether your budget works. When it doesn't, it says so and suggests
+what to cut.
 
-It's supposed to feel like advice from a friend who actually lives in the city you're visiting, not a chatbot quoting Wikipedia.
+The system prompt bans hedging: no "around", no "approximately", no "immerse
+yourself in the vibrant culture". If somewhere is touristy and not worth it,
+it says so. The interface is built around that voice — a field guide, not a
+travel brochure.
 
-## Screenshots
+## What it does
 
-![Landing page](./screenshots/landing.png)
+- **Live pricing.** Four parallel searches — flights, transit passes,
+  accommodation, attraction fees — so numbers come from this month rather than
+  the model's training data.
+- **Budget arithmetic you can check.** Per-person-per-day appears live as you
+  type, before you wait a minute for generation. The itinerary then shows its
+  working: cheapest viable day, line by line, against your total.
+- **14 currencies.** Prices are converted into the one you chose rather than
+  echoing whatever the source page happened to use.
+- **A map that follows the plan.** Every named place is pinned and coloured by
+  day. Selecting a day dims the rest and reframes the map, so you can see
+  whether the plan is geographically sensible or has you crossing the city
+  three times before lunch.
+- **Optional accounts.** Save trips, with a dashboard of what you have planned.
 
-![Generated itinerary](./screenshots/itinerary.png)
+## Engineering decisions worth defending
 
-![Map with day-color-coded pins](./screenshots/map.png)
+### Three LLM providers, because one is a single point of failure
 
-## What's actually different from other AI travel tools
+This project migrated Claude → Groq → Gemini, and every migration happened
+because a quota ran out mid-use. The cause was never the provider; it was
+having exactly one.
 
-I tried Wonderplan, Layla, Mindtrip, and ChatGPT before building this. They all do roughly the same thing: pretty UI wrapped around generic LLM output. Wayfare's differences:
+`lib/llm.ts` tries each configured provider in turn — Groq, then Gemini, then
+OpenRouter — skipping any whose key is absent. Adding redundancy is an
+environment variable, not a code change. Free tiers come first so paid credit
+is spent only once they are exhausted.
 
-**Web search is forced, not optional.** Every response runs 4 live searches in parallel to verify prices and conditions before any recommendation is made. The prompt explicitly bans the model from using vague words like "around" or "approximately" — it has to give real numbers or mark uncertain ones with "(verify current)".
+Failover happens **only before the first token**. Once a provider starts
+writing we stay with it: switching mid-document would splice half a Gemini
+itinerary onto half a Llama one, which is worse than a short one.
 
-**The prompt is hostile to AI clichés.** The system prompt has rules like "never write 'immerse yourself in the vibrant culture'" and "if a place is touristy and not worth it, say so." Most AI tools won't tell you something sucks. Mine will.
+It also self-corrects on `413`. Providers reject a request when prompt plus
+completion exceeds their limit, and that threshold is neither documented nor
+stable across tiers. Rather than pick a conservative constant and permanently
+give up longer itineraries, it asks for the full budget and halves it on
+rejection.
 
-**Honest budget feasibility check.** If you say "€400 for 7 days in London," it tells you that doesn't work and shows what does. Generic AI tools pretend everything is doable.
+### An XSS hole that arrives by web search
 
-**Map with day-color-coded pins.** Every place from the itinerary gets a Mapbox pin colored by which day you visit it. So you can see at a glance whether the plan is geographically sensible or has you crossing the city three times in one day.
+Map popups were built with `setHTML()` interpolating place names — which come
+from model output, which is shaped by live search results. The attack path:
 
-**Safety briefing that's actually specific.** Not "be aware of your surroundings" — specific. "Moped phone snatchings happen on Shoreditch High Street, Old Street roundabout, and Bethnal Green Road. Don't stand on the curb with your phone out."
+```
+attacker publishes a page ranking for "<city> attractions"
+  → Tavily fetches it
+  → its text enters the prompt
+  → the model emits a crafted place name
+  → markup executes in a visitor's browser
+```
 
-## Tech stack
+The attacker never contacts the victim. Popups are now assembled as DOM nodes
+with `textContent`, so nothing is parsed as markup.
 
-- **Next.js 15** with App Router and TypeScript
-- **Tailwind CSS** + **shadcn/ui** for the design system
-- **Google Gemini API** (gemini-3.5-flash) as the language model (free tier)
-- **Tavily Search API** for real-time web search (free tier, 1000 searches/month)
-- **Mapbox GL JS** for the map visualization
-- **Streaming responses** via ReadableStream so output appears as it's generated
-- **Vercel** for hosting, auto-deploys on every git push
-- **GitHub** for version control
+This is indirect prompt injection, and it is worth knowing that *any* app
+feeding retrieved web content to a model and rendering the output has this
+shape of problem.
 
-There's also an earlier Python + Streamlit prototype I used to validate the prompt and approach before building the proper Next.js version. The first production version actually ran on Anthropic's Claude API, then Groq + Llama 3.3 70B, before settling on Gemini + Tavily for the best free tier limits.
+### Ownership lives in the WHERE clause
 
-## How it actually works
+Every query in `lib/db/queries.ts` takes a `userId` and filters on it. A
+forgotten check becomes a missing argument the compiler catches, rather than
+one account silently reading another's trips.
 
-When you submit the form:
+`getTrip` returns `undefined` for both "no such trip" and "not yours", and the
+API answers 404 rather than 403 — 403 would confirm the id exists.
 
-1. The form posts to `/api/plan`, a Next.js API route
-2. The route takes your destination, dates, budget, and interests and builds 4 targeted search queries: flights, transit, accommodation, and attractions
-3. All 4 searches run in parallel through Tavily for speed
-4. Search results get packaged into one prompt with strict formatting rules
-5. That prompt goes to the Gemini API with streaming enabled
-6. The response streams back token by token via a ReadableStream
-7. The frontend reads the stream and updates the page in real time
-8. At the very end of the response, the model outputs a JSON block listing every named place with lat/lng coordinates
-9. The frontend parses that JSON, hides it from the visible text, and renders the places as colored pins on a Mapbox map
+### No account enumeration
 
-The whole thing runs on Vercel's serverless functions, which have a 60-second timeout on the free tier — manageable because parallel searches finish in 3-5 seconds and Gemini streams fast and handles long structured prompts reliably.
+- Credentials login compares against a dummy hash when the account is missing
+  or Google-only, so response time does not reveal which emails are registered.
+- Password reset answers identically whether or not the address exists,
+  whether the account is OAuth-only, and whether the email actually sent.
+- Only a **malformed** address is reported, since that is the sender's own
+  typo rather than information about someone else.
 
-## Hard parts I had to figure out
+### Reset tokens are stored hashed
 
-**Migrating from Anthropic to free APIs.** The first production version used Claude with Anthropic's built-in web_search tool, which cost about €0.20 per trip. That adds up fast when sharing with friends. Migrated to Gemini 2.0 Flash (free tier) + Tavily (1000 free searches/month) for €0/month on normal usage. Switched from SDK-based calls to direct REST fetch to avoid auth issues with newer API key formats. Added a model fallback list so the app automatically tries the next model if one is overloaded.
+Only a SHA-256 hash of each token is kept, so read access to the database does
+not confer the ability to reset anyone's password — the same argument that
+applies to hashing passwords. Tokens are single-use, expire in 30 minutes, and
+a successful reset revokes every other outstanding token so a leaked older
+link cannot be replayed.
 
-**Vercel's 60-second timeout.** Early versions timed out constantly because the LLM takes 30-60 seconds to do searches before any text comes out. Fix was switching to streaming responses — Vercel keeps the function alive as long as data is flowing, even past 60 seconds.
+### The planner never sits behind a login wall
 
-**Stopping the LLM from leaking JSON into the visible output.** The model is supposed to put the place-list JSON at the end in a code block, but it sometimes drops the code fences. I ended up writing a parser that finds the JSON by looking for the earliest marker among three options (a `## Map data` heading, a triple-backtick json fence, or a raw `[{...` array containing `"lat"`) and cuts everything from that point onward out of the display text.
+Auth is optional by design. Anyone can plan a trip immediately; saving is the
+upgrade. Signed out, the save control becomes a sign-in link carrying a
+callback rather than a disabled button.
 
-**API key leaks.** Made the classic mistake early on of pasting an API key directly into a code file. Had to revoke and regenerate. Now I'm religious about `.env.local` and `.gitignore`.
+A missing `DATABASE_URL` disables accounts rather than throwing at import
+time, so the planner keeps working even when the database does not.
 
-**Map coordinates from an LLM.** The model knows lat/lng for famous places but approximates for obscure ones. Some pins land a few hundred meters off the real spot. Mapbox geocoding would fix this but adds another API call per place — left it as-is for v1.
+### Every dashboard figure is real
 
-## Known limitations
+Trips planned, distinct destinations, planned spend, days to next departure —
+all computed from saved trips. There is no weather tile, no flight status, no
+booking widget, because there is no data behind them. Spend is grouped by
+currency rather than summed, since adding PKR to EUR produces a number that
+means nothing.
 
-Being honest about what's not great:
+## How a request actually works
 
-- Coordinates from the LLM are sometimes slightly off for obscure venues
-- No saved trips yet — refreshing the page loses your itinerary. localStorage for this is planned
-- English only
-- Response takes 30-60 seconds — fast streaming after the parallel searches finish
-- Single user, no accounts. Trips aren't saved or shareable
-- Tavily free tier caps at 1000 searches/month (~250 trips). Plenty for portfolio use
-- Response quality is good but occasionally misses nuance on obscure destinations
+1. The form posts to `/api/plan`; inputs are bounded before anything else
+   happens, so an oversized request cannot drive unbounded token spend.
+2. Four targeted queries — flights, transit, accommodation, attractions — run
+   in parallel through Tavily, and each result is clipped so prompt size stays
+   predictable regardless of how verbose a page is.
+3. Results are packaged into one prompt with strict formatting rules and sent
+   to the first available provider with streaming enabled.
+4. The response streams back and the frontend parses `## ` sections as they
+   arrive, so the page fills in rather than waiting.
+5. The model ends with a JSON block of every named place and its coordinates.
+   The frontend splits that off, hides it, and renders the pins.
 
-## What I actually learned building this
+Saved trips store the markdown verbatim and re-parse it at read time, so
+improving how sections render improves every trip already saved instead of
+freezing old ones in an old format.
 
-- How to structure a prompt for forcing specific output format (and how easily models ignore your rules if you're not strict)
-- How streaming LLM responses work on serverless platforms and why they're necessary for anything that takes longer than a few seconds
-- The difference between a working local demo and a deployable production app is almost entirely error handling and edge cases
-- How Next.js App Router separates server and client code
-- Why "just use the LLM output directly" doesn't work — you always need a parser
-- How to debug bugs that only happen in production (the worst kind)
-- API key hygiene the hard way
-- Trade-offs between paid LLM providers with built-in tools vs. free providers with manual wiring — and when the migration is worth doing
+## Stack
 
-## Running it locally
+Next.js 16 · TypeScript · Tailwind v4 · Neon Postgres + Drizzle ·
+Auth.js v5 · Groq / Gemini / OpenRouter · Tavily · Mapbox · Vercel
 
-You need:
+Motion is CSS and Canvas only — no animation library, which is ~40 kB for what
+transforms already do at 60fps.
 
-- Node.js 20 or higher
-- A Gemini API key from [aistudio.google.com](https://aistudio.google.com) (free)
-- A Tavily API key from [tavily.com](https://tavily.com) (free)
-- A Mapbox public token from [account.mapbox.com](https://account.mapbox.com) (free)
+There is also an earlier Python + Streamlit prototype I used to validate the
+prompt before building the real thing.
+
+## Running it
 
 ```bash
 git clone https://github.com/aamirabbas858/wayfare.git
-cd wayfare
-npm install
-```
-
-Create `.env.local` in the project root:
-
-```
-GEMINI_API_KEY=AQ...
-TAVILY_API_KEY=tvly-...
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1...
-```
-
-Then:
-
-```bash
+cd wayfare && npm install
+cp .env.example .env.local     # fill in your keys
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Only two variables are needed to plan trips. Everything else is optional.
 
-## What's next
+| Variable | Needed for |
+|---|---|
+| `GROQ_API_KEY` *(or `GEMINI_API_KEY`, `OPENROUTER_API_KEY`)* | generating itineraries |
+| `TAVILY_API_KEY` | live price research |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | the map |
+| `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | accounts and saving |
+| `AUTH_RESEND_KEY` | password reset emails |
 
-- localStorage to remember recent trips
-- Custom domain
-- Maybe a Supabase database for shareable, persistent trips
-- Better mobile layout on the planner page
+Schema lives in `lib/db/schema.ts`; `npx drizzle-kit push` applies it.
 
-## About me
+## Known limits
 
-I'm a CS undergrad at BSBI Berlin, building this in the evenings around classes and a part-time bakery job. Trying to learn what it actually takes to ship something real, not just finish coursework.
+- Prices are researched live and can move between generation and booking. Each
+  itinerary ends with a list of claims worth verifying before paying.
+- Free-tier models produce shorter itineraries than paid ones. The token
+  budget adapts downward rather than failing, so length varies with whichever
+  provider answered.
+- Reset emails only reach the Resend account owner's address until a domain is
+  verified.
+- No rate limiting on `/api/plan`. Per-IP limits on serverless need a KV store,
+  which is not wired up.
 
-Reach me: aamirabbas858@gmail.com
-LinkedIn: https://www.linkedin.com/in/abbas-aamir-474969353
+---
+
+Built by [Abbas Aamir](https://www.linkedin.com/in/abbas-aamir-474969353/) — CS undergraduate in Berlin.
