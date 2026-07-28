@@ -8,6 +8,7 @@ import {
   parseSections,
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
+import { reconcileBudget } from "@/lib/budget";
 
 /**
  * Renders a stored itinerary using exactly the same components as the live
@@ -18,13 +19,23 @@ import { useActiveSection } from "@/lib/hooks";
 export default function SavedTrip({
   markdown,
   places,
+  budget,
+  currency,
 }: {
   markdown: string;
   places: Place[];
+  budget: number;
+  currency: string;
 }) {
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
-  const sections = useMemo(() => parseSections(markdown), [markdown]);
+  // Totals are recomputed here rather than trusted from the stored markdown,
+  // so trips saved before the arithmetic was fixed are corrected on the way
+  // to the screen instead of keeping a wrong total forever.
+  const sections = useMemo(
+    () => parseSections(reconcileBudget(markdown, budget, currency)),
+    [markdown, budget, currency]
+  );
   const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
   const active = useActiveSection(sectionIds);
 

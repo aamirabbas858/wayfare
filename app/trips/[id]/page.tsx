@@ -89,7 +89,12 @@ export default async function TripPage({
           </div>
         </header>
 
-        <SavedTrip markdown={trip.markdown} places={trip.places} />
+        <SavedTrip
+          markdown={trip.markdown}
+          places={trip.places}
+          budget={trip.budget}
+          currency={trip.currency}
+        />
       </main>
 
       <Footer />

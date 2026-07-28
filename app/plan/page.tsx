@@ -12,6 +12,7 @@ import {
   type Section,
 } from "@/components/Itinerary";
 import { useActiveSection } from "@/lib/hooks";
+import { reconcileBudget } from "@/lib/budget";
 import SaveTrip from "@/components/SaveTrip";
 import {
   CURRENCIES,
@@ -114,8 +115,17 @@ export default function PlanPage() {
       }
     }
 
-    return { sections: parseSections(prose), places: parsed };
-  }, [raw]);
+    // Reconciled against the budget that was actually submitted, not the
+    // live form state — editing a field after generating must not silently
+    // rewrite the totals of the itinerary already on screen.
+    const reconciled = reconcileBudget(
+      prose,
+      parseInt(submitted?.budget ?? "0", 10) || 0,
+      submitted?.currency ?? DEFAULT_CURRENCY
+    );
+
+    return { sections: parseSections(reconciled), places: parsed };
+  }, [raw, submitted]);
 
   const sectionIds = useMemo(() => sections.map((s) => s.id), [sections]);
   const active = useActiveSection(sectionIds);
