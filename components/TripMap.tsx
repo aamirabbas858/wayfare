@@ -149,6 +149,12 @@ export default function TripMap({
 
     for (const { el, day } of markers.current) {
       const dimmed = activeDay !== null && day !== activeDay;
+      // Mapbox owns these elements and rewrites their transform on every
+      // frame. Highlighting has to be written straight to the node — going
+      // through React would fight the map for control of the same style
+      // attribute, which is why opacity and filter are used and transform is
+      // not touched.
+      // eslint-disable-next-line react-hooks/immutability
       el.style.opacity = dimmed ? "0.25" : "1";
       el.style.filter = dimmed ? "grayscale(0.6)" : "none";
       el.style.zIndex = dimmed ? "0" : "1";

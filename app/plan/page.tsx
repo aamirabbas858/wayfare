@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { ArrowLeft, Loader2, Search, Sparkles } from "lucide-react";
 import { Nav, Footer } from "@/components/Chrome";
 import TripMap, { DayLegend, type Place } from "@/components/TripMap";

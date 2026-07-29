@@ -36,14 +36,18 @@ export default async function DashboardPage() {
   const [topCurrency, topSpend] =
     Object.entries(spendByCurrency).sort((a, b) => b[1] - a[1])[0] ?? [];
 
+  // The clock is read once. Three separate reads during a render are three
+  // different instants, and a trip could sort as both upcoming and past if
+  // the day rolled over between them.
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+
   const daysToNext = stats.nextDeparture
-    ? Math.ceil(
-        (new Date(stats.nextDeparture).getTime() - Date.now()) / 86_400_000
-      )
+    ? Math.ceil((new Date(stats.nextDeparture).getTime() - now.getTime()) / 86_400_000)
     : null;
 
-  const upcoming = trips.filter((t) => t.endDate >= new Date().toISOString().slice(0, 10));
-  const past = trips.filter((t) => t.endDate < new Date().toISOString().slice(0, 10));
+  const upcoming = trips.filter((t) => t.endDate >= today);
+  const past = trips.filter((t) => t.endDate < today);
 
   return (
     <div className="min-h-screen bg-background">

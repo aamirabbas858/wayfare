@@ -1,5 +1,7 @@
 # Wayfare
 
+[![CI](https://github.com/aamirabbas858/wayfare/actions/workflows/ci.yml/badge.svg)](https://github.com/aamirabbas858/wayfare/actions/workflows/ci.yml)
+
 **A travel planner that tells you what a trip actually costs — including what to skip.**
 
 Live: **https://wayfare-xi.vercel.app** · No account needed to use it.
@@ -133,6 +135,20 @@ callback rather than a disabled button.
 
 A missing `DATABASE_URL` disables accounts rather than throwing at import
 time, so the planner keeps working even when the database does not.
+
+### Checks run on every push
+
+`npm test` covers the two places where correctness is not obvious from
+reading the code: the budget arithmetic, and splitting map data off an
+itinerary. Both suites are built from **real broken output** rather than
+synthetic fixtures — the buffer double-count and the half-written JSON array
+that cost a 12-day trip all of its map pins. A made-up fixture would not have
+caught either.
+
+CI runs typecheck, lint, tests and a production build with no secrets present.
+That last part is deliberate: anything that cannot build without a key is a
+route that would take the whole site down the day that key is missing, which
+has already happened here once.
 
 ### Every dashboard figure is real
 

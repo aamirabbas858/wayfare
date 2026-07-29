@@ -20,7 +20,10 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(
     if (!el) return;
 
     // Anyone who has asked for reduced motion gets the end state immediately.
+    // matchMedia does not exist during server rendering, so this cannot be
+    // decided any earlier than here.
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(true);
       return;
     }
@@ -42,7 +45,10 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(
     return () => io.disconnect();
   }, [options.threshold, options.rootMargin]);
 
-  return { ref, visible };
+  // Returned as a tuple rather than an object. `ref={r.ref}` reads a
+  // property during render, which the React Compiler flags; destructuring at
+  // the call site hands the ref over directly and says the same thing.
+  return [ref, visible] as const;
 }
 
 /**
@@ -54,6 +60,10 @@ export function useTheme() {
   const [dark, setDark] = useState(true);
 
   useEffect(() => {
+    // Reads the class the no-flash script in layout.tsx already applied,
+    // rather than defaulting and then correcting. The DOM is the source of
+    // truth here and it is only readable after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDark(document.documentElement.classList.contains("dark"));
   }, []);
 

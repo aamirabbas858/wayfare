@@ -51,9 +51,9 @@ const STEPS = [
 ];
 
 export default function Home() {
-  const proof = useReveal<HTMLDivElement>();
-  const how = useReveal<HTMLDivElement>();
-  const close = useReveal<HTMLDivElement>();
+  const [proofRef, proofVisible] = useReveal<HTMLDivElement>();
+  const [howRef, howVisible] = useReveal<HTMLDivElement>();
+  const [closeRef, closeVisible] = useReveal<HTMLDivElement>();
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,8 +146,8 @@ export default function Home() {
 
         {/* ── PROOF: what the output actually reads like ─────────────── */}
         <section
-          ref={proof.ref}
-          data-visible={proof.visible}
+          ref={proofRef}
+          data-visible={proofVisible}
           className="reveal border-y border-hairline bg-surface/40"
         >
           <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-24">
@@ -166,7 +166,7 @@ export default function Home() {
                   className="reveal card-surface group relative flex flex-col overflow-hidden p-6
                              transition-[transform,box-shadow,border-color] duration-300
                              hover:-translate-y-1 hover:shadow-[0_20px_50px_-24px_rgba(0,0,0,0.45)]"
-                  data-visible={proof.visible}
+                  data-visible={proofVisible}
                 >
                   <span
                     aria-hidden
@@ -194,7 +194,7 @@ export default function Home() {
         </section>
 
         {/* ── HOW ───────────────────────────────────────────────────── */}
-        <section id="how" ref={how.ref} data-visible={how.visible} className="reveal">
+        <section id="how" ref={howRef} data-visible={howVisible} className="reveal">
           <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
             <p className="eyebrow mb-4">How it works</p>
             <h2 className="display mb-14 max-w-2xl text-[clamp(1.9rem,4.4vw,3rem)] font-semibold">
@@ -217,8 +217,8 @@ export default function Home() {
 
         {/* ── CLOSE ─────────────────────────────────────────────────── */}
         <section
-          ref={close.ref}
-          data-visible={close.visible}
+          ref={closeRef}
+          data-visible={closeVisible}
           className="reveal relative overflow-hidden border-t border-hairline"
         >
           <div className="map-grid absolute inset-0" aria-hidden />
