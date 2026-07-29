@@ -46,15 +46,20 @@ travel brochure.
 
 ## Engineering decisions worth defending
 
-### Five LLM providers, because one is a single point of failure
+### Three LLM providers, because one is a single point of failure
 
 This project migrated Claude → Groq → Gemini, and every migration happened
 because a quota ran out mid-use. The cause was never the provider; it was
 having exactly one.
 
-`lib/llm.ts` tries each configured provider in turn — Mistral, NVIDIA NIM,
-Groq, OpenRouter, Gemini — skipping any whose key is absent. Adding redundancy
-is an environment variable, not a code change.
+`lib/llm.ts` tries each configured provider in turn, skipping any whose key
+is absent. Adding redundancy is an environment variable, not a code change.
+
+**Running in production today: Mistral, then NVIDIA NIM, then Groq.** The code
+also supports OpenRouter and Gemini; neither is configured. Gemini was dropped
+after its prepaid balance ran out — an empty balance does not refill the way a
+daily allowance does, and leaving a dead provider in the chain costs a wasted
+request on every trip.
 
 The order is measured rather than assumed. Groq's free tier turned out to be
 **100,000 tokens per day** — roughly eight itineraries shared between every
@@ -109,6 +114,38 @@ one account silently reading another's trips.
 
 `getTrip` returns `undefined` for both "no such trip" and "not yours", and the
 API answers 404 rather than 403 — 403 would confirm the id exists.
+
+### Sign in with Google, or with a password
+
+Two ways in, and they interact awkwardly enough to be worth writing down.
+
+**Google** uses OAuth: Wayfare never sees a password. The browser goes to
+Google, Google asks the user to approve, and returns a signed code that the
+server exchanges for the account's email. Setting it up means registering the
+app in Google Cloud Console, enabling the OAuth consent screen, and listing
+exactly which URLs Google is allowed to return to:
+
+```
+https://wayfare-xi.vercel.app/api/auth/callback/google    production
+http://localhost:3000/api/auth/callback/google            local
+```
+
+Those must match character for character — a trailing slash is a different
+URL, and the failure is a `redirect_uri_mismatch` that names no useful cause.
+
+**Email and password** is the fallback, hashed with bcrypt.
+
+The awkward part is what happens when one person uses both. Signing up with
+Google and later trying a password on the same address must not work — it
+would let anyone who guesses an email claim a Google account. So a
+credentials login against a Google-only account fails, and it fails *in the
+same way and after the same delay* as a login against an address that does
+not exist at all. See below.
+
+One consequence worth knowing: **Credentials forces JWT sessions.** Auth.js
+cannot store a database session for a credentials login, so once that provider
+exists every session is a signed token rather than a database row — including
+the Google ones.
 
 ### No account enumeration
 
@@ -179,8 +216,7 @@ freezing old ones in an old format.
 ## Stack
 
 Next.js 16 · TypeScript · Tailwind v4 · Neon Postgres + Drizzle ·
-Auth.js v5 · Mistral / NVIDIA NIM / Groq / OpenRouter / Gemini ·
-Tavily · Mapbox · Vercel
+Auth.js v5 · Mistral / NVIDIA NIM / Groq · Tavily · Mapbox · Vercel
 
 Motion is CSS and Canvas only — no animation library, which is ~40 kB for what
 transforms already do at 60fps.
@@ -201,7 +237,7 @@ Only two variables are needed to plan trips. Everything else is optional.
 
 | Variable | Needed for |
 |---|---|
-| any one of `MISTRAL_API_KEY`, `NVIDIA_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` | generating itineraries |
+| at least one of `MISTRAL_API_KEY`, `NVIDIA_API_KEY`, `GROQ_API_KEY` | generating itineraries |
 | `TAVILY_API_KEY` | live price research |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | the map |
 | `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | accounts and saving |
