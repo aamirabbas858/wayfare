@@ -112,5 +112,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 
+  // Vercel serves every deployment on two hosts: the production alias
+  // (wayfare-xi.vercel.app) and a per-deploy URL like
+  // wayfare-n4j18w3f7-....vercel.app. trustHost means Auth.js builds the OAuth
+  // callback from whichever Host header arrived — so signing in worked on the
+  // alias and failed with redirect_uri_mismatch on the deploy URL, because
+  // only the alias is registered with Google. Google does not accept wildcard
+  // redirect URIs, and a new deploy URL is generated on every push, so
+  // registering them is not an option.
+  //
+  // AUTH_URL pins the callback to one canonical origin regardless of how the
+  // request arrived. It must be set in production; without it this bug returns
+  // silently the moment anyone opens a deployment URL rather than the alias.
   trustHost: true,
 });

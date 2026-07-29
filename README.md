@@ -147,6 +147,22 @@ cannot store a database session for a credentials login, so once that provider
 exists every session is a signed token rather than a database row — including
 the Google ones.
 
+### One canonical origin for OAuth
+
+Vercel serves every deployment on two hosts: the production alias, and a
+per-deploy URL like `wayfare-n4j18w3f7-….vercel.app`. With `trustHost: true`,
+Auth.js builds the OAuth callback from whichever `Host` header arrived — so
+Google sign-in worked on the alias and failed with `redirect_uri_mismatch` on
+the deploy URL, because only the alias is registered with Google.
+
+Registering them is not an option: Google rejects wildcard redirect URIs, and
+a new deploy URL is minted on every push.
+
+`AUTH_URL` pins the callback to one origin regardless of how the request
+arrived. It went unnoticed for weeks because every test used the alias — the
+bug only appears if you reach the app through the Vercel dashboard, which
+links to the deployment rather than the alias.
+
 ### No account enumeration
 
 - Credentials login compares against a dummy hash when the account is missing
@@ -241,6 +257,7 @@ Only two variables are needed to plan trips. Everything else is optional.
 | `TAVILY_API_KEY` | live price research |
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | the map |
 | `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | accounts and saving |
+| `AUTH_URL` | **required in production** — see below |
 | `AUTH_RESEND_KEY` | password reset emails |
 
 Schema lives in `lib/db/schema.ts`; `npx drizzle-kit push` applies it.
