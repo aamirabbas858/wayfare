@@ -1,14 +1,12 @@
+import { describe, expect, it } from "vitest";
+import { amountOn, reconcileBudget } from "./budget";
+
 /**
- * Run: npx tsx lib/budget.test.ts
- *
  * The fixture is the real Budget breakdown from a live Karachi → Berlin
- * itinerary, buffer double-count and all. Synthetic input would not have
- * caught it: the bug needed the model's own mix of local prices, bracketed
+ * itinerary, buffer double-count and all. A synthetic one would not have
+ * caught the bug: it needed the model's own mix of local prices, bracketed
  * conversions, nested activity bullets and free entries.
  */
-import assert from "node:assert";
-import { reconcileBudget, amountOn } from "./budget";
-
 const BROKEN = `## Budget breakdown
 - **Flights**: US$249 (≈ PKR 69,222)
 - **Lodging**: €10/night × 3 nights = €30 (≈ PKR 9,480)
@@ -26,45 +24,68 @@ const BROKEN = `## Budget breakdown
 ## Getting there
 From Karachi → Berlin, the cheapest flight is US$249 (≈ PKR 69,222).`;
 
-/* ── the conversion on a line is the traveller's, not the local price ── */
-assert.strictEqual(amountOn("- **Lodging**: €10/night × 3 nights = €30 (≈ PKR 9,480)", "PKR"), 9480);
-assert.strictEqual(amountOn("- **Flights**: US$249 (≈ PKR 69,222)", "PKR"), 69222);
-assert.strictEqual(amountOn("  - Topography of Terror: free", "PKR"), null);
-// A euro trip has no bracket, so the price itself is the only match.
-assert.strictEqual(amountOn("- **Lodging**: €10/night × 3 nights = €30", "EUR"), 30);
-// "Rs" is the PKR symbol and must count as well as the code.
-assert.strictEqual(amountOn("- **Food**: Rs3,160/day", "PKR"), 3160);
-
-/* ── the arithmetic ─────────────────────────────────────────────────── */
-const fixed = reconcileBudget(BROKEN, 400000, "PKR");
-
 const SUBTOTAL = 69222 + 9480 + 11376 + 10618 + 4424; // 105,120
-const TOTAL = SUBTOTAL * 1.1; // 115,632
 
-assert.match(fixed, /\*\*Subtotal \(before buffer\)\*\*: PKR 105,120/);
-assert.match(fixed, /\*\*Total\*\*: PKR 115,632/);
-assert.match(fixed, /Comfortable — PKR 284,368 surplus/);
-assert.strictEqual(SUBTOTAL, 105120);
-assert.strictEqual(Math.round(TOTAL), 115632);
+describe("amountOn", () => {
+  it("takes the traveller's currency, not the local price", () => {
+    // A line carries two currencies and the conversion follows the local
+    // price, so the last occurrence is the one that counts.
+    expect(amountOn("- **Lodging**: €10/night × 3 nights = €30 (≈ PKR 9,480)", "PKR")).toBe(9480);
+    expect(amountOn("- **Flights**: US$249 (≈ PKR 69,222)", "PKR")).toBe(69222);
+  });
 
-// The buffer must not be counted twice — the bug this exists to prevent.
-assert.ok(!fixed.includes("126,144"), "buffer still double-counted");
+  it("reads the price itself when there is no conversion", () => {
+    expect(amountOn("- **Lodging**: €10/night × 3 nights = €30", "EUR")).toBe(30);
+  });
 
-// Line items are the model's and must survive untouched.
-assert.match(fixed, /Topography of Terror: free/);
-assert.match(fixed, /Pergamon Museum: €14 \(≈ PKR 4,424\)/);
-assert.match(fixed, /US\$249/);
+  it("accepts the symbol as well as the code", () => {
+    expect(amountOn("- **Food**: Rs3,160/day", "PKR")).toBe(3160);
+  });
 
-// Neighbouring sections must not be disturbed.
-assert.match(fixed, /## Getting there\nFrom Karachi → Berlin/);
+  it("returns null for a line with no money on it", () => {
+    expect(amountOn("  - Topography of Terror: free", "PKR")).toBeNull();
+  });
+});
 
-/* ── it must decline rather than guess ──────────────────────────────── */
-assert.strictEqual(reconcileBudget("## Essentials\nNo budget here.", 400000, "PKR"),
-  "## Essentials\nNo budget here.");
-assert.strictEqual(reconcileBudget(BROKEN, 0, "PKR"), BROKEN);
-assert.strictEqual(reconcileBudget(BROKEN, NaN, "PKR"), BROKEN);
+describe("reconcileBudget", () => {
+  const fixed = reconcileBudget(BROKEN, 400000, "PKR");
 
-/* ── over-budget verdict flips ──────────────────────────────────────── */
-assert.match(reconcileBudget(BROKEN, 50000, "PKR"), /Over budget by PKR 65,632/);
+  it("does not count the buffer twice", () => {
+    // The bug: subtotal already included the buffer, then the total added it
+    // again, overstating the trip by 8%.
+    expect(fixed).not.toContain("126,144");
+    expect(fixed).toContain("**Subtotal (before buffer)**: PKR 105,120");
+    expect(fixed).toContain("**Total**: PKR 115,632");
+  });
 
-console.log("budget: all checks passed");
+  it("computes the arithmetic the model got wrong", () => {
+    expect(SUBTOTAL).toBe(105120);
+    expect(Math.round(SUBTOTAL * 1.1)).toBe(115632);
+    expect(fixed).toMatch(/Comfortable — PKR 284,368 surplus/);
+  });
+
+  it("leaves the model's line items untouched", () => {
+    // Choosing what a hostel costs is the model's job. Only the arithmetic
+    // over those choices is ours.
+    expect(fixed).toContain("Topography of Terror: free");
+    expect(fixed).toContain("Pergamon Museum: €14 (≈ PKR 4,424)");
+    expect(fixed).toContain("US$249");
+  });
+
+  it("does not disturb neighbouring sections", () => {
+    expect(fixed).toMatch(/## Getting there\nFrom Karachi → Berlin/);
+  });
+
+  it("flips the verdict when the trip does not fit", () => {
+    expect(reconcileBudget(BROKEN, 50000, "PKR")).toMatch(/Over budget by PKR 65,632/);
+  });
+
+  it("declines rather than guessing", () => {
+    // A confident wrong correction would be worse than the inconsistency it
+    // replaces, so anything unparseable is returned untouched.
+    const noBudgetSection = "## Essentials\nNo budget here.";
+    expect(reconcileBudget(noBudgetSection, 400000, "PKR")).toBe(noBudgetSection);
+    expect(reconcileBudget(BROKEN, 0, "PKR")).toBe(BROKEN);
+    expect(reconcileBudget(BROKEN, NaN, "PKR")).toBe(BROKEN);
+  });
+});
