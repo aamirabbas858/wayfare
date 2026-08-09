@@ -56,6 +56,9 @@ export const metadata: Metadata = {
     description: "Real prices, named places and local rules for any trip.",
   },
   alternates: { canonical: "/" },
+  // Search Console URL-prefix verification. vercel.app is Vercel's zone, so the
+  // DNS methods are not available to us — this tag is how ownership is proven.
+  verification: { google: "hhTGAVsJKy-NuLvNLHKDa8FIwtyHOC_UAb6wzW_IW_g" },
   robots: {
     index: true,
     follow: true,
