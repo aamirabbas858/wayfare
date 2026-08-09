@@ -10,7 +10,10 @@ import { Nav, Footer } from "@/components/Chrome";
 import TripCard from "@/components/TripCard";
 import { formatAmount } from "@/lib/currency";
 
-export const metadata: Metadata = { title: "My trips" };
+export const metadata: Metadata = {
+  title: "My trips",
+  robots: { index: false, follow: false },
+};
 export const dynamic = "force-dynamic";
 
 /* Every figure on this page is computed from saved trips. Nothing here is a

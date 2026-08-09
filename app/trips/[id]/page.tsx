@@ -17,11 +17,14 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  // Someone's saved trip is private by definition — never index it, whether or
+  // not it resolves.
+  const noindex = { robots: { index: false, follow: false } };
   const session = await auth();
-  if (!session?.user?.id || !dbConfigured) return { title: "Trip" };
+  if (!session?.user?.id || !dbConfigured) return { title: "Trip", ...noindex };
   const { id } = await params;
   const trip = await getTrip(session.user.id, id);
-  return { title: trip ? `${trip.destination}` : "Trip" };
+  return { title: trip ? `${trip.destination}` : "Trip", ...noindex };
 }
 
 export default async function TripPage({

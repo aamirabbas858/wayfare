@@ -55,7 +55,28 @@ export const metadata: Metadata = {
     title: "Wayfare — Travel planning, made honest",
     description: "Real prices, named places and local rules for any trip.",
   },
-  robots: { index: true, follow: true },
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
+};
+
+// Tells search engines what this is rather than leaving them to infer it from
+// the copy. Kept to what the product genuinely is — a free web app with no
+// account required — since a rich result that overstates gets dropped.
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "Wayfare",
+  url: SITE,
+  applicationCategory: "TravelApplication",
+  operatingSystem: "Any",
+  description:
+    "Wayfare researches live prices and writes a day-by-day travel itinerary with real costs, named places, and what to skip.",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+  author: { "@type": "Person", name: "Abbas Aamir" },
 };
 
 export const viewport: Viewport = {
@@ -91,6 +112,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
       </head>
       <body
         className={`${fraunces.variable} ${manrope.variable} ${jetbrains.variable} antialiased`}
