@@ -5,7 +5,10 @@ import AuthForm from "@/components/AuthForm";
 import RouteCanvas from "@/components/RouteCanvas";
 import { auth } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "Create an account" };
+export const metadata: Metadata = {
+  title: "Create an account",
+  robots: { index: false, follow: false },
+};
 
 export default async function SignUpPage() {
   // Already signed in: send them where they were going rather than showing a

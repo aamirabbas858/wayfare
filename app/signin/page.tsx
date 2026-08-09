@@ -5,7 +5,11 @@ import AuthForm from "@/components/AuthForm";
 import RouteCanvas from "@/components/RouteCanvas";
 import { auth } from "@/lib/auth";
 
-export const metadata: Metadata = { title: "Sign in" };
+// Account surface: nothing here belongs in a search index.
+export const metadata: Metadata = {
+  title: "Sign in",
+  robots: { index: false, follow: false },
+};
 
 export default async function SignInPage() {
   // Already signed in: send them where they were going rather than showing a

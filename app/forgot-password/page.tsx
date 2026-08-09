@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import { ForgotPasswordForm } from "@/components/ResetForms";
 import RouteCanvas from "@/components/RouteCanvas";
 
-export const metadata: Metadata = { title: "Forgot password" };
+export const metadata: Metadata = {
+  title: "Forgot password",
+  robots: { index: false, follow: false },
+};
 
 export default function Page() {
   return (
