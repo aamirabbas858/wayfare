@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { generateStream } from "./llm";
+import { generateStream, hasProvider, providerStatus } from "./llm";
 
 /**
  * These cover the failover loop, not the providers themselves.
@@ -145,5 +145,48 @@ describe("generateStream failover", () => {
       "api.groq.com",
     ]);
     expect(out).toBe("from groq");
+  });
+});
+
+describe("providerStatus", () => {
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const k of PROVIDER_KEYS) {
+      saved[k] = process.env[k];
+      delete process.env[k];
+    }
+  });
+
+  afterEach(() => {
+    for (const k of PROVIDER_KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  // A mistyped envVar would read as "no key configured" and silently drop a
+  // provider — the same shape of invisible failure this file exists for.
+  it("names an env var this module actually reads, for every provider", () => {
+    for (const p of providerStatus()) {
+      expect(PROVIDER_KEYS).toContain(p.envVar);
+    }
+  });
+
+  it("reports a provider as configured exactly when its key is present", () => {
+    expect(providerStatus().every((p) => !p.configured)).toBe(true);
+    expect(hasProvider()).toBe(false);
+
+    process.env.GROQ_API_KEY = "test-key";
+
+    const groq = providerStatus().find((p) => p.provider === "groq");
+    expect(groq?.configured).toBe(true);
+    expect(groq?.keyLength).toBe("test-key".length);
+    expect(hasProvider()).toBe(true);
+  });
+
+  it("never returns the key itself", () => {
+    process.env.GROQ_API_KEY = "super-secret-value";
+    expect(JSON.stringify(providerStatus())).not.toContain("super-secret-value");
   });
 });

@@ -38,8 +38,8 @@ interface ModelSpec {
 
 interface Provider {
   name: string;
-  /** Present only when the environment supplies a key. */
-  enabled: () => boolean;
+  /** Environment variable holding this provider's key. */
+  envVar: string;
   /** Models tried in order within this provider. */
   models: ModelSpec[];
   request: (model: ModelSpec, opts: GenerateOptions) => Promise<Response>;
@@ -51,7 +51,7 @@ interface Provider {
 
 const gemini: Provider = {
   name: "gemini",
-  enabled: () => Boolean(process.env.GEMINI_API_KEY),
+  envVar: "GEMINI_API_KEY",
   models: [
     { id: "gemini-3.5-flash", maxTokens: 8192 },
     { id: "gemini-3.1-flash-lite", maxTokens: 8192 },
@@ -79,7 +79,7 @@ const gemini: Provider = {
 
 const groq: Provider = {
   name: "groq",
-  enabled: () => Boolean(process.env.GROQ_API_KEY),
+  envVar: "GROQ_API_KEY",
   // Production models only — preview models can be withdrawn at short notice,
   // which is the fragility this file exists to avoid.
   //
@@ -131,7 +131,7 @@ const groq: Provider = {
 // 100,000 tokens per day can. Sign-up needs phone verification, not a card.
 const mistral: Provider = {
   name: "mistral",
-  enabled: () => Boolean(process.env.MISTRAL_API_KEY),
+  envVar: "MISTRAL_API_KEY",
   // mistral-large-latest is not in this account's catalogue at all and answers
   // 403 tier_not_allowed; medium is the largest tier this key can reach.
   models: [
@@ -190,7 +190,7 @@ const mistral: Provider = {
 // error. It stays as the fallback, where a slow answer beats none.
 const nvidia: Provider = {
   name: "nvidia",
-  enabled: () => Boolean(process.env.NVIDIA_API_KEY),
+  envVar: "NVIDIA_API_KEY",
   models: [
     { id: "openai/gpt-oss-20b", maxTokens: 8192 },
     { id: "nvidia/nemotron-3.5-lightning-30b-a3b", maxTokens: 8192 },
@@ -223,7 +223,7 @@ const nvidia: Provider = {
 
 const openrouter: Provider = {
   name: "openrouter",
-  enabled: () => Boolean(process.env.OPENROUTER_API_KEY),
+  envVar: "OPENROUTER_API_KEY",
   models: [
     { id: "meta-llama/llama-3.3-70b-instruct:free", maxTokens: 4096 },
     { id: "mistralai/mistral-small-3.2-24b-instruct:free", maxTokens: 4096 },
@@ -272,6 +272,9 @@ const openrouter: Provider = {
 const PROVIDERS: Provider[] = [mistral, nvidia, groq, openrouter, gemini];
 
 /** Status codes worth trying the next model or provider for. */
+/** A provider is usable only when the running build can see its key. */
+const enabled = (p: Provider) => Boolean(process.env[p.envVar]);
+
 const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 /**
@@ -373,7 +376,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
       const tried: string[] = [];
 
       for (const provider of PROVIDERS) {
-        if (!provider.enabled()) continue;
+        if (!enabled(provider)) continue;
 
         models: for (const spec of provider.models) {
         // A provider can reject a request outright when prompt + completion
@@ -521,7 +524,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 
 /** True when at least one provider has credentials — used for health checks. */
 export function hasProvider(): boolean {
-  return PROVIDERS.some((p) => p.enabled());
+  return PROVIDERS.some(enabled);
 }
 
 /**
@@ -533,3 +536,92 @@ export function hasProvider(): boolean {
  * different claims, and this is the only way to tell them apart from
  * outside.
  */
+export function providerStatus() {
+  return PROVIDERS.map((p) => ({
+    provider: p.name,
+    configured: enabled(p),
+    envVar: p.envVar,
+    keyLength: process.env[p.envVar]?.length ?? 0,
+    models: p.models.map((m) => m.id),
+  }));
+}
+
+/**
+ * Whether each configured provider's models will actually stream text.
+ *
+ * Presence is not health. On 20 Sep 2026 every key was present and correct
+ * while every model behind them was dead — withdrawn, retired, or tier
+ * locked — so a report built on `configured` alone said the service was fine
+ * for as long as it was completely broken. Worse, one model answered 200 and
+ * streamed nothing at all, which even a request-level check would have read
+ * as success.
+ *
+ * So this asks for real tokens and counts them. It costs a few per model,
+ * which is why it is opt-in rather than part of every health check.
+ */
+export async function probeProviders(signal?: AbortSignal) {
+  const checks = PROVIDERS.filter(enabled).flatMap((p) =>
+    p.models.map(async (spec) => {
+      const started = Date.now();
+      try {
+        const res = await p.request(
+          { ...spec, maxTokens: 64 },
+          { system: "Reply with one short sentence.", user: "Say hello.", signal }
+        );
+        if (!res.ok || !res.body) {
+          return {
+            provider: p.name,
+            model: spec.id,
+            ok: false,
+            status: res.status,
+            detail: (await res.text().catch(() => "")).slice(0, 160),
+          };
+        }
+
+        // Count characters the extractor would actually pass through — a
+        // model whose output lands in some other field is not usable here,
+        // however healthy its HTTP response looks.
+        let chars = 0;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            try {
+              chars += (p.extract(JSON.parse(payload)) ?? "").length;
+            } catch {
+              /* partial frame */
+            }
+          }
+        }
+
+        return {
+          provider: p.name,
+          model: spec.id,
+          ok: chars > 0,
+          status: res.status,
+          chars,
+          ms: Date.now() - started,
+          ...(chars === 0 && { detail: "streamed no text the extractor can read" }),
+        };
+      } catch (err) {
+        return {
+          provider: p.name,
+          model: spec.id,
+          ok: false,
+          detail: err instanceof Error ? err.message : "request failed",
+        };
+      }
+    })
+  );
+
+  return Promise.all(checks);
+}
