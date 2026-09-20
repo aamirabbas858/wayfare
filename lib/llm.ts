@@ -247,6 +247,17 @@ const PROVIDERS: Provider[] = [mistral, nvidia, groq, openrouter, gemini];
 /** Status codes worth trying the next model or provider for. */
 const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
+/**
+ * Rejections that are about the model rather than the provider or the key.
+ *
+ * A model can be withdrawn (404), reach end of life (410), or sit outside the
+ * account's tier (403) while the provider and its credentials are perfectly
+ * fine. Falling through to the provider's next model is precisely what the
+ * model list is for. Anything else — 401 above all — is about the credential,
+ * and the provider's other models cannot help with that.
+ */
+const MODEL_SPECIFIC = new Set([403, 404, 410]);
+
 /** Longest a request will sit waiting out a rate limit. */
 const MAX_WAIT_MS = 20_000;
 
@@ -410,11 +421,13 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             }
 
             // A transient or quota failure will not improve with a smaller
-            // request — move to the next model.
-            if (RETRYABLE.has(res.status)) continue models;
+            // request, and a withdrawn or tier-locked model will not improve
+            // at all — either way the next model is the thing to try.
+            if (RETRYABLE.has(res.status) || MODEL_SPECIFIC.has(res.status))
+              continue models;
 
-            // Anything else is specific to this provider (bad key, unknown
-            // model), so skip its remaining models entirely.
+            // Anything else is about the credential rather than the model
+            // (a rejected key), so skip this provider's remaining models.
             break models;
           }
 
