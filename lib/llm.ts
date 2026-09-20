@@ -260,21 +260,33 @@ const openrouter: Provider = {
  * cannot.
  *
  * Measured, not assumed. Groq's free tier is 100,000 tokens per DAY — around
- * eight itineraries shared between every visitor — which is why it can no
- * longer lead. Mistral's Experiment tier is metered monthly and is roughly
- * three orders of magnitude larger; NVIDIA meters requests per minute with no
- * published daily token cap. Groq stays in the chain because it is by far the
- * fastest when it has budget left.
+ * eight itineraries shared between every visitor. Mistral's Experiment tier is
+ * metered monthly and is roughly three orders of magnitude larger; NVIDIA
+ * meters requests per minute with no published daily token cap.
+ *
+ * Groq leads anyway, which reverses the previous order. That order was set
+ * while the failover was broken — a provider that ran out took the whole
+ * request down with it, so leading with the smallest allowance was genuinely
+ * dangerous. Now that a spent provider is skipped and the next one picks up,
+ * exhausting Groq costs speed rather than service.
+ *
+ * And speed is not a luxury here. Measured on the same 400-token request,
+ * Groq answers in 150-320ms against NVIDIA's 2,100-2,800ms, and that ~8x
+ * decides whether a long itinerary finishes at all: a 3-night trip for two
+ * ran past the 300s function limit on NVIDIA and returned a 504. Being
+ * slowest is how this provider fails, not just how it performs.
+ *
+ * So: fast while the day's budget lasts, slow but working once it does not.
  *
  * Gemini is last because its prepaid balance is empty, and an empty balance
  * does not refill on its own the way a daily allowance does.
  */
-const PROVIDERS: Provider[] = [mistral, nvidia, groq, openrouter, gemini];
+const PROVIDERS: Provider[] = [groq, mistral, nvidia, openrouter, gemini];
 
-/** Status codes worth trying the next model or provider for. */
 /** A provider is usable only when the running build can see its key. */
 const enabled = (p: Provider) => Boolean(process.env[p.envVar]);
 
+/** Status codes worth trying the next model or provider for. */
 const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 /**

@@ -127,24 +127,30 @@ describe("generateStream failover", () => {
     process.env.MISTRAL_API_KEY = "test-key";
     process.env.GROQ_API_KEY = "test-key";
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(jsonError(404, { error: { code: "model_not_found" } }))
-      .mockResolvedValueOnce(jsonError(404, { error: { code: "model_not_found" } }))
-      .mockResolvedValueOnce(new Response(sseBody("from groq"), { status: 200 }));
+    // Which provider leads, and how many models it has, are both tuning
+    // decisions that change — so the test reads them rather than restating
+    // them. What must hold is that every model of the first provider is
+    // spent before the second is touched at all.
+    const configured = providerStatus().filter((p) => p.configured);
+    const [first, second] = configured;
+    expect(second).toBeDefined();
+
+    const fetchMock = vi.fn();
+    for (let i = 0; i < first.models.length; i++) {
+      fetchMock.mockResolvedValueOnce(
+        jsonError(404, { error: { code: "model_not_found" } })
+      );
+    }
+    fetchMock.mockResolvedValueOnce(
+      new Response(sseBody("from the next provider"), { status: 200 })
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const out = await collect(generateStream({ system: SYSTEM, user: USER }));
 
-    // Both of Mistral's models are spent before Groq is touched, and the
-    // handoff is asserted on the host rather than on any model id.
-    const hosts = fetchMock.mock.calls.map((c) => new URL(c[0] as string).host);
-    expect(hosts).toEqual([
-      "api.mistral.ai",
-      "api.mistral.ai",
-      "api.groq.com",
-    ]);
-    expect(out).toBe("from groq");
+    const models = requestedModels(fetchMock);
+    expect(models).toEqual([...first.models, second.models[0]]);
+    expect(out).toBe("from the next provider");
   });
 });
 
