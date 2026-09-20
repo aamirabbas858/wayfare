@@ -83,14 +83,22 @@ const groq: Provider = {
   // Production models only — preview models can be withdrawn at short notice,
   // which is the fragility this file exists to avoid.
   //
-  // Probed against the live free-tier account: openai/gpt-oss-120b and
-  // llama-3.1-8b-instant both return 413 for a request this size, so they are
-  // not listed. maxTokens is the completion cap the model accepts, not a
-  // preference — exceeding it is rejected before any generation happens.
-  // 8192 is accepted by this model — the earlier 413s came from prompt size,
-  // not the completion cap, and search results are now clipped upstream. The
-  // itinerary is ~15 sections, so a low cap shows up directly as thin days.
-  models: [{ id: "llama-3.3-70b-versatile", maxTokens: 8192 }],
+  // Read live from /v1/models on 20 Sep 2026, then each entry verified with a
+  // short completion. llama-3.3-70b-versatile was withdrawn (404) and the
+  // whole llama instruct family has left this account's catalogue, so the
+  // gpt-oss pair leads instead; all three below stream real content.
+  //
+  // gpt-oss-120b was previously excluded for returning 413 at this request
+  // size. That was prompt size rather than the completion cap, search results
+  // are clipped upstream now, and a 413 retries at half the budget anyway.
+  //
+  // maxTokens is the cap the model accepts, not a preference — the itinerary
+  // is ~15 sections, so a low cap shows up directly as thin days.
+  models: [
+    { id: "openai/gpt-oss-120b", maxTokens: 8192 },
+    { id: "openai/gpt-oss-20b", maxTokens: 8192 },
+    { id: "qwen/qwen3.8-27b", maxTokens: 8192 },
+  ],
   request: (model, { system, user, signal }) =>
     fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -124,8 +132,10 @@ const groq: Provider = {
 const mistral: Provider = {
   name: "mistral",
   enabled: () => Boolean(process.env.MISTRAL_API_KEY),
+  // mistral-large-latest is not in this account's catalogue at all and answers
+  // 403 tier_not_allowed; medium is the largest tier this key can reach.
   models: [
-    { id: "mistral-large-latest", maxTokens: 8192 },
+    { id: "mistral-medium-latest", maxTokens: 8192 },
     { id: "mistral-small-latest", maxTokens: 8192 },
   ],
   request: (model, { system, user, signal }) =>
@@ -159,14 +169,31 @@ const mistral: Provider = {
 // of large requests, which is exactly the shape this tier is generous about.
 //
 // Model IDs are taken from a live read of the /v1/models endpoint rather than
-// documentation. llama-3.3-70b leads because it is the same model the prompt
-// was tuned against on Groq, so output shape does not change on failover.
+// documentation. Both previous entries — meta/llama-3.3-70b-instruct and
+// nvidia/llama-3.3-nemotron-super-49b-v1.5 — reached end of life on
+// 26 Aug 2026 and now answer 410, which is what took this provider down.
+// Re-read on 20 Sep 2026, and every candidate was then run through one short
+// completion rather than trusted because it appeared in the catalogue —
+// being listed turned out not to mean being usable:
+//
+//   nvidia/nemotron-3-super-120b-a12b      200, one frame, zero characters
+//   nvidia/llama-3.1-nemotron-70b-instruct 404 despite being listed
+//   mistralai/mistral-large-2-instruct     404 despite being listed
+//
+// The two below both streamed real content and are what this list is built
+// from. A model that answers 200 and says nothing is the worst case here: it
+// looks like a working provider and silently produces an empty itinerary.
+//
+// gpt-oss-20b leads on speed, not quality: nemotron-3.5-lightning spends its
+// budget on reasoning_content and ran a full itinerary past the 300s function
+// limit without finishing, which reads to the user as a hang rather than an
+// error. It stays as the fallback, where a slow answer beats none.
 const nvidia: Provider = {
   name: "nvidia",
   enabled: () => Boolean(process.env.NVIDIA_API_KEY),
   models: [
-    { id: "meta/llama-3.3-70b-instruct", maxTokens: 8192 },
-    { id: "nvidia/llama-3.3-nemotron-super-49b-v1.5", maxTokens: 8192 },
+    { id: "openai/gpt-oss-20b", maxTokens: 8192 },
+    { id: "nvidia/nemotron-3.5-lightning-30b-a3b", maxTokens: 8192 },
   ],
   request: (model, { system, user, signal }) =>
     fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
