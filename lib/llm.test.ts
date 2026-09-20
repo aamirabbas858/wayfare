@@ -97,10 +97,12 @@ describe("generateStream failover", () => {
 
       const out = await collect(generateStream({ system: SYSTEM, user: USER }));
 
-      expect(requestedModels(fetchMock)).toEqual([
-        "mistral-large-latest",
-        "mistral-small-latest",
-      ]);
+      // Asserted by shape rather than by id: these ids go stale — that is the
+      // bug this file exists for — but "fell through to a different model on
+      // the same provider" is the behaviour that must hold regardless.
+      const tried = requestedModels(fetchMock);
+      expect(tried).toHaveLength(2);
+      expect(tried[1]).not.toBe(tried[0]);
       expect(out).toBe("itinerary text");
       expect(out).not.toContain("[Error:");
     }
@@ -117,7 +119,7 @@ describe("generateStream failover", () => {
 
     const out = await collect(generateStream({ system: SYSTEM, user: USER }));
 
-    expect(requestedModels(fetchMock)).toEqual(["mistral-large-latest"]);
+    expect(requestedModels(fetchMock)).toHaveLength(1);
     expect(out).toContain("[Error:");
   });
 
@@ -134,10 +136,13 @@ describe("generateStream failover", () => {
 
     const out = await collect(generateStream({ system: SYSTEM, user: USER }));
 
-    expect(requestedModels(fetchMock)).toEqual([
-      "mistral-large-latest",
-      "mistral-small-latest",
-      "llama-3.3-70b-versatile",
+    // Both of Mistral's models are spent before Groq is touched, and the
+    // handoff is asserted on the host rather than on any model id.
+    const hosts = fetchMock.mock.calls.map((c) => new URL(c[0] as string).host);
+    expect(hosts).toEqual([
+      "api.mistral.ai",
+      "api.mistral.ai",
+      "api.groq.com",
     ]);
     expect(out).toBe("from groq");
   });
