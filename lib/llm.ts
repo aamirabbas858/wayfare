@@ -565,7 +565,11 @@ export async function probeProviders(signal?: AbortSignal) {
       const started = Date.now();
       try {
         const res = await p.request(
-          { ...spec, maxTokens: 64 },
+          // Reasoning models spend their first tokens thinking and emit no
+          // readable content at all on a tight budget — 64 reported working
+          // gpt-oss models as dead. This has to clear the thinking phase to
+          // mean anything.
+          { ...spec, maxTokens: 400 },
           { system: "Reply with one short sentence.", user: "Say hello.", signal }
         );
         if (!res.ok || !res.body) {
@@ -582,6 +586,7 @@ export async function probeProviders(signal?: AbortSignal) {
         // model whose output lands in some other field is not usable here,
         // however healthy its HTTP response looks.
         let chars = 0;
+        let frames = 0;
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -595,6 +600,7 @@ export async function probeProviders(signal?: AbortSignal) {
             if (!line.startsWith("data:")) continue;
             const payload = line.slice(5).trim();
             if (!payload || payload === "[DONE]") continue;
+            frames++;
             try {
               chars += (p.extract(JSON.parse(payload)) ?? "").length;
             } catch {
@@ -609,8 +615,17 @@ export async function probeProviders(signal?: AbortSignal) {
           ok: chars > 0,
           status: res.status,
           chars,
+          frames,
           ms: Date.now() - started,
-          ...(chars === 0 && { detail: "streamed no text the extractor can read" }),
+          // Frames separate the two ways of producing nothing: a model that
+          // never says anything, and one that talks in a field this code
+          // does not read.
+          ...(chars === 0 && {
+            detail:
+              frames > 1
+                ? `streamed ${frames} frames but no text the extractor can read`
+                : "streamed nothing at all",
+          }),
         };
       } catch (err) {
         return {
