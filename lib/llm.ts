@@ -585,11 +585,16 @@ export async function probeProviders(signal?: AbortSignal) {
           { system: "Reply with one short sentence.", user: "Say hello.", signal }
         );
         if (!res.ok || !res.body) {
+          const headers: Record<string, string> = {};
+          res.headers.forEach((v, k) => {
+            if (/ratelimit|retry-after|reset|quota/i.test(k)) headers[k] = v;
+          });
           return {
             provider: p.name,
             model: spec.id,
             ok: false,
             status: res.status,
+            headers,
             detail: (await res.text().catch(() => "")).slice(0, 160),
           };
         }
