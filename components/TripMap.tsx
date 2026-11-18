@@ -80,7 +80,7 @@ export default function TripMap({
 
   /* Markers are built only when the place list changes. Highlighting is a
      separate effect that restyles them, so selecting a day never destroys and
-     recreates DOM — which is both cheaper and avoids the popup closing. */
+     recreates DOM - which is both cheaper and avoids the popup closing. */
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
@@ -150,7 +150,7 @@ export default function TripMap({
     for (const { el, day } of markers.current) {
       const dimmed = activeDay !== null && day !== activeDay;
       // Mapbox owns these elements and rewrites their transform on every
-      // frame. Highlighting has to be written straight to the node — going
+      // frame. Highlighting has to be written straight to the node - going
       // through React would fight the map for control of the same style
       // attribute, which is why opacity and filter are used and transform is
       // not touched.

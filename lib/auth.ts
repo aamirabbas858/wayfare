@@ -23,12 +23,12 @@ export const signUpSchema = credentialsSchema.extend({
   name: z.string().trim().min(1, "Please enter your name.").max(80),
 });
 
-/** Cost 12 — noticeably slower than the default 10, still a few hundred ms. */
+/** Cost 12 - noticeably slower than the default 10, still a few hundred ms. */
 export const hashPassword = (plain: string) => bcrypt.hash(plain, 12);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // The adapter persists users and linked OAuth accounts. It is omitted when
-  // no database is configured so the site still builds and runs — sign-in is
+  // no database is configured so the site still builds and runs - sign-in is
   // simply unavailable, rather than the whole app failing.
   adapter: dbConfigured
     ? DrizzleAdapter(db, {
@@ -115,7 +115,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Vercel serves every deployment on two hosts: the production alias
   // (wayfare-xi.vercel.app) and a per-deploy URL like
   // wayfare-n4j18w3f7-....vercel.app. trustHost means Auth.js builds the OAuth
-  // callback from whichever Host header arrived — so signing in worked on the
+  // callback from whichever Host header arrived - so signing in worked on the
   // alias and failed with redirect_uri_mismatch on the deploy URL, because
   // only the alias is registered with Google. Google does not accept wildcard
   // redirect URIs, and a new deploy URL is generated on every push, so

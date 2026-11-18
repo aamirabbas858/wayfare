@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 // Two public routes, so the sitemap is written out rather than generated. Saved
-// trips are per-account and deliberately absent — they are noindex and would
+// trips are per-account and deliberately absent - they are noindex and would
 // leak nothing but 404s to a crawler anyway.
 export default function sitemap(): MetadataRoute.Sitemap {
   const site =

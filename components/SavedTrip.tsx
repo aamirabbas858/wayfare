@@ -31,7 +31,7 @@ export default function SavedTrip({
   const [activeDay, setActiveDay] = useState<number | null>(null);
 
   // Markdown is stored verbatim, so the trailing map-data JSON is still in it
-  // and has to be cut off here exactly as the live planner does — leaving it
+  // and has to be cut off here exactly as the live planner does - leaving it
   // in rendered the raw array on the page under a "Map data" heading.
   //
   // Totals are recomputed rather than trusted from the stored text, so trips

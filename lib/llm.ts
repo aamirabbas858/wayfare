@@ -3,7 +3,7 @@
  *
  * Wayfare has now been through Claude, Groq and Gemini, and each migration
  * happened because one provider's quota ran out. The cause was never the
- * provider — it was having exactly one. This tries each configured provider
+ * provider - it was having exactly one. This tries each configured provider
  * in order and only fails when they all do.
  *
  * A provider is skipped silently when its key is absent, so adding resilience
@@ -28,7 +28,7 @@ export interface GenerateOptions {
 /**
  * Completion cap per model. Asking for more than a model permits is rejected
  * with HTTP 413 before any generation happens, so these are correctness
- * settings rather than tuning — and they differ per model, which is why they
+ * settings rather than tuning - and they differ per model, which is why they
  * cannot live in one shared constant.
  */
 interface ModelSpec {
@@ -80,7 +80,7 @@ const gemini: Provider = {
 const groq: Provider = {
   name: "groq",
   envVar: "GROQ_API_KEY",
-  // Production models only — preview models can be withdrawn at short notice,
+  // Production models only - preview models can be withdrawn at short notice,
   // which is the fragility this file exists to avoid.
   //
   // Read live from /v1/models on 20 Sep 2026, then each entry verified with a
@@ -92,7 +92,7 @@ const groq: Provider = {
   // size. That was prompt size rather than the completion cap, search results
   // are clipped upstream now, and a 413 retries at half the budget anyway.
   //
-  // maxTokens is the cap the model accepts, not a preference — the itinerary
+  // maxTokens is the cap the model accepts, not a preference - the itinerary
   // is ~15 sections, so a low cap shows up directly as thin days.
   models: [
     { id: "openai/gpt-oss-120b", maxTokens: 8192 },
@@ -169,11 +169,11 @@ const mistral: Provider = {
 // of large requests, which is exactly the shape this tier is generous about.
 //
 // Model IDs are taken from a live read of the /v1/models endpoint rather than
-// documentation. Both previous entries — meta/llama-3.3-70b-instruct and
-// nvidia/llama-3.3-nemotron-super-49b-v1.5 — reached end of life on
+// documentation. Both previous entries - meta/llama-3.3-70b-instruct and
+// nvidia/llama-3.3-nemotron-super-49b-v1.5 - reached end of life on
 // 26 Aug 2026 and now answer 410, which is what took this provider down.
 // Re-read on 20 Sep 2026, and every candidate was then run through one short
-// completion rather than trusted because it appeared in the catalogue —
+// completion rather than trusted because it appeared in the catalogue -
 // being listed turned out not to mean being usable:
 //
 //   nvidia/nemotron-3-super-120b-a12b      200, one frame, zero characters
@@ -259,13 +259,13 @@ const openrouter: Provider = {
  * providers that can absorb a bad afternoon are used before the ones that
  * cannot.
  *
- * Measured, not assumed. Groq's free tier is 100,000 tokens per DAY — around
+ * Measured, not assumed. Groq's free tier is 100,000 tokens per DAY - around
  * eight itineraries shared between every visitor. Mistral's Experiment tier is
  * metered monthly and is roughly three orders of magnitude larger; NVIDIA
  * meters requests per minute with no published daily token cap.
  *
  * Groq leads anyway, which reverses the previous order. That order was set
- * while the failover was broken — a provider that ran out took the whole
+ * while the failover was broken - a provider that ran out took the whole
  * request down with it, so leading with the smallest allowance was genuinely
  * dangerous. Now that a spent provider is skipped and the next one picks up,
  * exhausting Groq costs speed rather than service.
@@ -295,7 +295,7 @@ const RETRYABLE = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
  * A model can be withdrawn (404), reach end of life (410), or sit outside the
  * account's tier (403) while the provider and its credentials are perfectly
  * fine. Falling through to the provider's next model is precisely what the
- * model list is for. Anything else — 401 above all — is about the credential,
+ * model list is for. Anything else - 401 above all - is about the credential,
  * and the provider's other models cannot help with that.
  */
 const MODEL_SPECIFIC = new Set([403, 404, 410]);
@@ -338,7 +338,7 @@ export class AllProvidersFailed extends Error {
  * Streams generated text as a ReadableStream of UTF-8 chunks.
  *
  * Failover only happens before the first token. Once a provider has started
- * emitting we stay with it — switching mid-document would splice two
+ * emitting we stay with it - switching mid-document would splice two
  * different itineraries together, which is worse than a truncated one.
  */
 /**
@@ -424,7 +424,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 
           if (!res.ok || !res.body) {
             // Read the body so the connection is released, and log it
-            // server-side — it must never reach the client, since upstream
+            // server-side - it must never reach the client, since upstream
             // errors carry billing and quota details.
             const detail = await res.text().catch(() => "");
             console.error(`[llm] ${label} HTTP ${res.status}: ${detail.slice(0, 300)}`);
@@ -444,7 +444,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
 
               // Out of quota rather than going too fast. Every model here
               // draws on the same allowance, so trying the rest is guaranteed
-              // to fail — skip to the next provider immediately.
+              // to fail - skip to the next provider immediately.
               if (wait === null || wait > MAX_WAIT_MS) {
                 console.warn(
                   `[llm] ${provider.name} quota exhausted${
@@ -458,13 +458,13 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
                 rateLimited = true;
                 console.warn(`[llm] ${label} rate limited, waiting ${wait}ms`);
                 await new Promise((r) => setTimeout(r, wait));
-                continue; // same model, same budget — the limit is time-based
+                continue; // same model, same budget - the limit is time-based
               }
             }
 
             // A transient or quota failure will not improve with a smaller
             // request, and a withdrawn or tier-locked model will not improve
-            // at all — either way the next model is the thing to try.
+            // at all - either way the next model is the thing to try.
             if (RETRYABLE.has(res.status) || MODEL_SPECIFIC.has(res.status))
               continue models;
 
@@ -500,7 +500,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
                     controller.enqueue(encoder.encode(text));
                   }
                 } catch {
-                  /* partial SSE frame — the next chunk completes it */
+                  /* partial SSE frame - the next chunk completes it */
                 }
               }
             }
@@ -519,7 +519,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
             return;
           }
 
-          // Connected but produced nothing — treat as a failure and continue.
+          // Connected but produced nothing - treat as a failure and continue.
           console.error(`[llm] ${label} returned an empty stream`);
         }
         }
@@ -534,7 +534,7 @@ export function generateStream(opts: GenerateOptions): ReadableStream<Uint8Array
   });
 }
 
-/** True when at least one provider has credentials — used for health checks. */
+/** True when at least one provider has credentials - used for health checks. */
 export function hasProvider(): boolean {
   return PROVIDERS.some(enabled);
 }
@@ -542,7 +542,7 @@ export function hasProvider(): boolean {
 /**
  * Which providers the running server can actually see, as booleans.
  *
- * Deliberately reports only presence and key length — never a key, or any
+ * Deliberately reports only presence and key length - never a key, or any
  * part of one. Environment variables are baked in at build time on Vercel,
  * so "I added the variable" and "the running deployment has it" are
  * different claims, and this is the only way to tell them apart from
@@ -562,8 +562,8 @@ export function providerStatus() {
  * Whether each configured provider's models will actually stream text.
  *
  * Presence is not health. On 20 Sep 2026 every key was present and correct
- * while every model behind them was dead — withdrawn, retired, or tier
- * locked — so a report built on `configured` alone said the service was fine
+ * while every model behind them was dead - withdrawn, retired, or tier
+ * locked - so a report built on `configured` alone said the service was fine
  * for as long as it was completely broken. Worse, one model answered 200 and
  * streamed nothing at all, which even a request-level check would have read
  * as success.
@@ -578,7 +578,7 @@ export async function probeProviders(signal?: AbortSignal) {
       try {
         const res = await p.request(
           // Reasoning models spend their first tokens thinking and emit no
-          // readable content at all on a tight budget — 64 reported working
+          // readable content at all on a tight budget - 64 reported working
           // gpt-oss models as dead. This has to clear the thinking phase to
           // mean anything.
           { ...spec, maxTokens: 400 },
@@ -599,7 +599,7 @@ export async function probeProviders(signal?: AbortSignal) {
           };
         }
 
-        // Count characters the extractor would actually pass through — a
+        // Count characters the extractor would actually pass through - a
         // model whose output lands in some other field is not usable here,
         // however healthy its HTTP response looks.
         let chars = 0;

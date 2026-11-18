@@ -25,7 +25,7 @@ Barcelona rewards early booking.
 /**
  * From a real 12-day New York itinerary whose closing pass ran out of budget
  * mid-array. JSON.parse rejects a half-written array, so the trip lost every
- * pin — one truncated entry costing all twenty-nine complete ones.
+ * pin - one truncated entry costing all twenty-nine complete ones.
  */
 const TRUNCATED = `## Map data
 

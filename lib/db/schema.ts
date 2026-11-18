@@ -13,7 +13,7 @@ import type { AdapterAccountType } from "next-auth/adapters";
    AUTH TABLES
 
    Shapes required by @auth/drizzle-adapter. Renaming columns here breaks
-   the adapter, so the only addition is `passwordHash` — Auth.js has no
+   the adapter, so the only addition is `passwordHash` - Auth.js has no
    opinion about credentials storage, and it is nullable because a user who
    signed in with Google has no password and never will.
    ──────────────────────────────────────────────────────────────────────── */
@@ -27,7 +27,7 @@ export const users = pgTable("user", {
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
   // Null for OAuth-only accounts. Never selected into anything that reaches
-  // the client — see lib/db/queries.ts, which always projects explicit columns.
+  // the client - see lib/db/queries.ts, which always projects explicit columns.
   passwordHash: text("passwordHash"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow().notNull(),
 });
@@ -75,7 +75,7 @@ export const verificationTokens = pgTable(
 /**
  * Single-use tokens for password reset. Kept separate from
  * verificationTokens so expiring or invalidating one flow cannot affect the
- * other, and so a used token can be marked rather than deleted — which makes
+ * other, and so a used token can be marked rather than deleted - which makes
  * "this link has already been used" distinguishable from "this link is
  * nonsense".
  */

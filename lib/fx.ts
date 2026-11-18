@@ -4,7 +4,7 @@ import "server-only";
  * Exchange rates.
  *
  * The model used to be told "convert every price into the user's currency".
- * It does not convert — it relabels. A €60 fine in Lisbon came back as
+ * It does not convert - it relabels. A €60 fine in Lisbon came back as
  * "Rs 60" for a traveller from Karachi, understating it by roughly 300×.
  * That is not a formatting bug; someone could budget on it.
  *
@@ -78,7 +78,7 @@ export async function ratesFor(code: string): Promise<RateTable | null> {
 }
 
 /** Two significant figures past the point for small rates, whole numbers for
- *  large ones — "303" rather than "303.4171" for PKR. */
+ *  large ones - "303" rather than "303.4171" for PKR. */
 function round(n: number): number {
   if (n >= 100) return Math.round(n);
   if (n >= 10) return Math.round(n * 10) / 10;

@@ -10,7 +10,7 @@ import { resolveCurrency } from "./currency";
  * different nightly rates; then the buffer was added to a subtotal that
  * already contained it, overstating a trip by 8%.
  *
- * `lib/fx.ts` already settled the principle for exchange rates — compute in
+ * `lib/fx.ts` already settled the principle for exchange rates - compute in
  * code, hand the model finished numbers. The same applies here, with one
  * difference: the line items are the model's to choose, and only the
  * arithmetic over them is ours. So the prices stay exactly as written and
@@ -30,7 +30,7 @@ const DERIVED = /buffer|subtotal|running total|^\W*total\b|budget verdict|total 
 /**
  * The traveller-currency amount on a line, or null.
  *
- * A line can carry several currencies — "€30 (≈ PKR 9,480)" — and the last
+ * A line can carry several currencies - "€30 (≈ PKR 9,480)" - and the last
  * occurrence of the traveller's own is the one that counts, because the
  * conversion is written after the local price. For a trip already in EUR
  * there is no bracket and the only match is the price itself.
@@ -56,7 +56,7 @@ function money(n: number, code: string): string {
  * Rewrites the `## Budget breakdown` section of an itinerary in place.
  *
  * Returns the markdown untouched when there is no budget section, no
- * parseable line item, or no budget to compare against — a wrong correction
+ * parseable line item, or no budget to compare against - a wrong correction
  * would be worse than the inconsistency it replaces.
  */
 export function reconcileBudget(

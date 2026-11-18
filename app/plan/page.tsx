@@ -26,7 +26,7 @@ type Phase = "form" | "researching" | "writing" | "done" | "error";
 
 const TODAY = new Date().toISOString().split("T")[0];
 
-/* What the API is genuinely doing while the user waits — four parallel
+/* What the API is genuinely doing while the user waits - four parallel
    Tavily searches, then generation. These are labels for real work, not a
    fake progress bar. */
 const RESEARCH_STEPS = [
@@ -89,7 +89,7 @@ export default function PlanPage() {
     const { prose, places: parsed } = splitMapData(raw);
 
     // Reconciled against the budget that was actually submitted, not the
-    // live form state — editing a field after generating must not silently
+    // live form state - editing a field after generating must not silently
     // rewrite the totals of the itinerary already on screen.
     const reconciled = reconcileBudget(
       prose,
@@ -280,7 +280,7 @@ export default function PlanPage() {
                     </span>
                     {/* step must be 1, not a round number: the browser validates
                         against min + (n × step), so min=1 with step=10 silently
-                        rejects everything that is not 1, 11, 21… — which is how
+                        rejects everything that is not 1, 11, 21… - which is how
                         a perfectly good 300000 became "Enter a valid value". */}
                     <input
                       type="number"
@@ -347,7 +347,7 @@ export default function PlanPage() {
                     </span>
                     {/* The bands are calibrated in euros. Rather than invent
                         exchange rates that would drift out of date, the verdict
-                        is only offered for EUR — the itinerary's own Reality
+                        is only offered for EUR - the itinerary's own Reality
                         check does this properly using live local prices. */}
                     {currency === "EUR" ? (
                       <span
@@ -521,7 +521,7 @@ export default function PlanPage() {
             </div>
 
             <div className="grid gap-10 xl:grid-cols-[190px_minmax(0,1fr)_400px]">
-              {/* Contents rail — desktop only */}
+              {/* Contents rail - desktop only */}
               <aside className="hidden xl:block">
                 <div className="sticky top-24">
                   <SectionRail sections={sections} active={active} />
@@ -543,7 +543,7 @@ export default function PlanPage() {
                 ))}
               </article>
 
-              {/* Map — sticky on desktop, inline first on mobile */}
+              {/* Map - sticky on desktop, inline first on mobile */}
               <aside className="order-first xl:order-none">
                 <div className="sticky top-24 space-y-3">
                   {places.length > 0 ? (

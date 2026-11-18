@@ -57,7 +57,7 @@ export const metadata: Metadata = {
   },
   alternates: { canonical: "/" },
   // Search Console URL-prefix verification. vercel.app is Vercel's zone, so the
-  // DNS methods are not available to us — this tag is how ownership is proven.
+  // DNS methods are not available to us - this tag is how ownership is proven.
   verification: { google: "hhTGAVsJKy-NuLvNLHKDa8FIwtyHOC_UAb6wzW_IW_g" },
   robots: {
     index: true,
@@ -67,8 +67,8 @@ export const metadata: Metadata = {
 };
 
 // Tells search engines what this is rather than leaving them to infer it from
-// the copy. Kept to what the product genuinely is — a free web app with no
-// account required — since a rich result that overstates gets dropped.
+// the copy. Kept to what the product genuinely is - a free web app with no
+// account required - since a rich result that overstates gets dropped.
 const JSON_LD = {
   "@context": "https://schema.org",
   "@type": "WebApplication",

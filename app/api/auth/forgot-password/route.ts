@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const user = await findUserByEmail(parsed.data.email);
 
     // OAuth-only accounts have no password to reset. Still answered
-    // identically — telling someone "that account uses Google" reveals how
+    // identically - telling someone "that account uses Google" reveals how
     // the address is registered.
     if (user?.passwordHash) {
       const { raw, hash } = createToken();

@@ -4,8 +4,8 @@
  * The model ends every trip with a JSON array of named places so the map can
  * pin them. It is data, not prose, and must never reach the page as text.
  *
- * This lived inline in the live planner, which meant saved trips — rendered
- * by a different component — never got it, and displayed the raw array under
+ * This lived inline in the live planner, which meant saved trips - rendered
+ * by a different component - never got it, and displayed the raw array under
  * a "Map data" heading. Extracted here so both paths cut in the same place:
  * a second copy of this logic is how the two drifted apart to begin with.
  */
@@ -13,7 +13,7 @@
 import type { Place } from "@/components/TripMap";
 
 export interface SplitItinerary {
-  /** Everything before the map data — the part that renders. */
+  /** Everything before the map data - the part that renders. */
   prose: string;
   /** Places with usable coordinates. Empty when absent or malformed. */
   places: Place[];
@@ -50,7 +50,7 @@ export function splitMapData(markdown: string): SplitItinerary {
  * A 12-day itinerary lists enough places that the closing pass can run out of
  * completion budget part-way through the array, leaving it ending on
  * `{"name":`. `JSON.parse` rejects the whole thing, and the result was a long
- * trip silently getting no map at all — every pin lost because the last one
+ * trip silently getting no map at all - every pin lost because the last one
  * was cut in half.
  *
  * So the array is parsed whole when it can be, and scanned object by object

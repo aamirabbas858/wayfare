@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 // Only the landing page and the planner are public. Everything else is either
 // an account surface or someone's saved trip, and none of it should be in an
-// index — the per-page metadata says the same thing, this is the crawl-level
+// index - the per-page metadata says the same thing, this is the crawl-level
 // half of it.
 const PRIVATE = [
   "/api/",

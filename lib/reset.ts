@@ -10,7 +10,7 @@ import { passwordResetTokens } from "@/lib/db/schema";
  *
  * Only a SHA-256 hash of the token is stored. Read access to the database
  * therefore does not grant the ability to reset anyone's password, which is
- * the same reasoning that applies to storing passwords hashed — a reset token
+ * the same reasoning that applies to storing passwords hashed - a reset token
  * is a temporary credential and deserves the same treatment.
  */
 

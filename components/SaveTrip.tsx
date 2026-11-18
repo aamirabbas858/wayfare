@@ -21,7 +21,7 @@ export interface TripInput {
 /**
  * Saves the finished itinerary.
  *
- * Only appears once generation has finished — offering it mid-stream would
+ * Only appears once generation has finished - offering it mid-stream would
  * store a half-written plan. Signed-out visitors get a sign-in link carrying
  * a callbackUrl rather than a disabled button, since "you can't do this" is
  * less useful than "here is how".

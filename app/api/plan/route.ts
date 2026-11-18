@@ -8,7 +8,7 @@ export const maxDuration = 300;
 
 // Built on first use rather than at import. The Tavily constructor throws when
 // the key is missing, and at module scope that throw happens while Next is
-// collecting page data — so one absent environment variable fails the whole
+// collecting page data - so one absent environment variable fails the whole
 // production build rather than the one route that needs it. The same reasoning
 // already applies to DATABASE_URL: a missing key should degrade a feature, not
 // take the site down.
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     // The ceiling only exists to reject nonsense, and it has to clear
-    // currencies with small unit values — a fortnight in PKR, INR or JPY runs
+    // currencies with small unit values - a fortnight in PKR, INR or JPY runs
     // into seven figures perfectly legitimately.
     const budgetNum = parseInt(String(budget), 10);
     if (!Number.isFinite(budgetNum) || budgetNum < 1 || budgetNum > 1_000_000_000) {
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     // Real rates, fetched here rather than asked of the model. Told to
     // "convert into PKR" the model relabels instead of converting, which
-    // turned a €60 fine into "Rs 60" — out by a factor of 300.
+    // turned a €60 fine into "Rs 60" - out by a factor of 300.
     const fx = await ratesFor(cur.code);
     const conversion = conversionNote(fx, cur.label);
 
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     const numTravelers = Math.min(Math.max(parseInt(String(travelers || "1"), 10) || 1, 1), 20);
     const dailyPerPerson = Math.round(budgetNum / numTravelers / days);
 
-    // Predefined searches — run in parallel for speed and reliability
+    // Predefined searches - run in parallel for speed and reliability
     const travelerSuffix = numTravelers > 1 ? ` for ${numTravelers} people` : "";
     const searchQueries = [
       `${orig} to ${dest} flights ${month} ${year}${numTravelers > 1 ? ` ${numTravelers} passengers` : ""}`,
@@ -187,7 +187,7 @@ ${placesContext}`;
 
     // Short trips are written in one request rather than three.
     //
-    // Every pass resends the system prompt and its share of the research —
+    // Every pass resends the system prompt and its share of the research -
     // roughly 3,000 tokens of overhead each. For a two-day trip that overhead
     // is paid three times to produce a document that fits in one completion,
     // and Groq's free tier is 100,000 tokens per DAY, so the waste is the
@@ -266,13 +266,13 @@ ${multiPass ? '\n\nStop after "Local transit". Do not continue past it.' : ""}`;
 ${overviewSections}`;
 
     // A 14-day itinerary at four stops a day does not fit in one completion,
-    // and the failure is silent — the model stops and the reader thinks the
+    // and the failure is silent - the model stops and the reader thinks the
     // plan is finished. Days are generated in blocks so trip length stops
     // being a constraint.
     // Measured against real output: a day is roughly 190 characters per stop,
     // so twelve days at four stops is about 2,300 tokens. That fits one
     // completion comfortably. The original failure was not that days are
-    // large — it was that all fifteen sections shared a single budget and the
+    // large - it was that all fifteen sections shared a single budget and the
     // earlier ones ate it, leaving the itinerary to stop at day two.
     //
     // Splitting every four days therefore fixed the wrong thing and cost six
@@ -373,7 +373,7 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
           // The closing pass carries six prose sections plus the map data,
           // and the map grows with the trip while the prose does not. A flat
           // 2,400 was enough for three days and ran out mid-array on twelve,
-          // ending the JSON on `{"name":` — which cost a long trip every one
+          // ending the JSON on `{"name":` - which cost a long trip every one
           // of its pins. Roughly 50 tokens per place, three places a day.
           { user: partThree, maxTokens: Math.min(6000, 2200 + days * 170) },
         ]
@@ -381,7 +381,7 @@ NEVER write "around" or "approximately" for prices. No filler, no clichés. Mark
           {
             // One request, one context. overviewContext carries all four
             // searches, so the day and closing sections lose nothing by not
-            // being sent their own copies — they were subsets of it anyway.
+            // being sent their own copies - they were subsets of it anyway.
             user: `${overviewContext}
 
 ---

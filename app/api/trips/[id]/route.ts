@@ -18,7 +18,7 @@ export async function DELETE(
   const { id } = await params;
 
   // deleteTrip filters on userId, so a request for someone else's trip
-  // removes nothing and is reported as missing rather than forbidden — which
+  // removes nothing and is reported as missing rather than forbidden - which
   // would confirm the id exists.
   const removed = await deleteTrip(session.user.id, id);
   if (!removed) {

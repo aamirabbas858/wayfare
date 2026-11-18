@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 /* Every figure on this page is computed from saved trips. Nothing here is a
-   placeholder waiting for a data source — a tile with invented numbers is
+   placeholder waiting for a data source - a tile with invented numbers is
    worse than no tile. */
 
 export default async function DashboardPage() {
@@ -30,7 +30,7 @@ export default async function DashboardPage() {
 
   const firstName = (session.user.name ?? "").split(" ")[0];
 
-  // Total planned spend, normalised per currency rather than summed blindly —
+  // Total planned spend, normalised per currency rather than summed blindly -
   // adding PKR to EUR would produce a number that means nothing.
   const spendByCurrency = trips.reduce<Record<string, number>>((acc, t) => {
     acc[t.currency] = (acc[t.currency] ?? 0) + t.budget;

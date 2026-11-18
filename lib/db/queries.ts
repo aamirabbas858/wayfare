@@ -42,7 +42,7 @@ export type TripSummary = {
   createdAt: Date;
 };
 
-/** Trip list for the dashboard. Markdown is excluded — it is the largest
+/** Trip list for the dashboard. Markdown is excluded - it is the largest
  *  column by far and no list view renders it. */
 export async function listTrips(userId: string): Promise<TripSummary[]> {
   return db
@@ -53,7 +53,7 @@ export async function listTrips(userId: string): Promise<TripSummary[]> {
 }
 
 /** A single trip including its itinerary. Returns undefined when the id does
- *  not exist *or* belongs to someone else — the caller cannot tell the
+ *  not exist *or* belongs to someone else - the caller cannot tell the
  *  difference, which is the point. */
 export async function getTrip(userId: string, tripId: string) {
   const [row] = await db

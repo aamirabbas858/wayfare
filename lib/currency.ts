@@ -3,7 +3,7 @@
  *
  * Shared by the form, the live budget readout and the prompt, so the symbol a
  * user picks is the symbol the itinerary is written in. Without this the model
- * echoes whatever currency the source pages happened to use — search results
+ * echoes whatever currency the source pages happened to use - search results
  * for Barcelona hotels returned złoty and dollars in testing.
  */
 export const CURRENCIES = [

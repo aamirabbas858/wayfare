@@ -75,7 +75,7 @@ export function useTheme() {
       try {
         localStorage.setItem("wayfare-theme", next ? "dark" : "light");
       } catch {
-        /* private browsing — the class still applied, it just won't persist */
+        /* private browsing - the class still applied, it just won't persist */
       }
       return next;
     });

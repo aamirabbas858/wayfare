@@ -17,7 +17,7 @@ import * as schema from "./schema";
 const url = process.env.DATABASE_URL;
 
 /** True when a database is configured. Auth and saving degrade rather than
- *  crash without one — planning a trip must keep working regardless. */
+ *  crash without one - planning a trip must keep working regardless. */
 export const dbConfigured = Boolean(url);
 
 // Deliberately not throwing at import time. A missing DATABASE_URL should

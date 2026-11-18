@@ -21,7 +21,7 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
   // The server cannot know which theme the browser applied, so the toggle
   // renders inert until it does. Setting state on mount is the point, not an
-  // accident — this is what makes the first paint match what the no-flash
+  // accident - this is what makes the first paint match what the no-flash
   // script already put on screen.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);

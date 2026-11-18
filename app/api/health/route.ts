@@ -5,7 +5,7 @@ import { probeProviders, providerStatus } from "@/lib/llm";
 /**
  * Configuration health check.
  *
- * Reports presence, not values — booleans and a table count, never a
+ * Reports presence, not values - booleans and a table count, never a
  * connection string or a key. Exists because Vercel resolves environment
  * variables at build time, so "I added the variable and redeployed" and "the
  * running deployment can use it" are separate claims that are otherwise
@@ -13,7 +13,7 @@ import { probeProviders, providerStatus } from "@/lib/llm";
  *
  * Planning providers are reported here too. This route once answered
  * ready: true through a total planning outage, because it only knew about
- * the database and auth — the one subsystem that was down was the one it
+ * the database and auth - the one subsystem that was down was the one it
  * could not see.
  *
  * `?probe=1` goes further and asks each configured model for a few real
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   if (dbConfigured) {
     try {
       // Also confirms the tables were actually created, which a plain
-      // "SELECT 1" would not — a reachable but empty database looks healthy
+      // "SELECT 1" would not - a reachable but empty database looks healthy
       // right up until the first sign-in fails.
       const rows = await db.execute(sql`
         select table_name from information_schema.tables

@@ -17,7 +17,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  // Someone's saved trip is private by definition — never index it, whether or
+  // Someone's saved trip is private by definition - never index it, whether or
   // not it resolves.
   const noindex = { robots: { index: false, follow: false } };
   const session = await auth();
@@ -39,7 +39,7 @@ export default async function TripPage({
   if (!dbConfigured) redirect("/plan");
 
   // getTrip filters on userId, so another account's trip is indistinguishable
-  // from one that does not exist — both land here as a 404.
+  // from one that does not exist - both land here as a 404.
   const trip = await getTrip(session.user.id, id);
   if (!trip) notFound();
 

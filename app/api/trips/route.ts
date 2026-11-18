@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // userId comes from the session, never from the request body — otherwise
+    // userId comes from the session, never from the request body - otherwise
     // a caller could write rows into someone else's account.
     const row = await createTrip({ ...parsed.data, userId: session.user.id });
     return Response.json({ id: row.id }, { status: 201 });

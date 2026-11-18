@@ -5,7 +5,7 @@ import { generateStream, hasProvider, providerStatus } from "./llm";
  * These cover the failover loop, not the providers themselves.
  *
  * The live bug they were written for: on 20 Sep 2026 every configured
- * provider's first model had gone stale at once — Mistral 403 (large is not
+ * provider's first model had gone stale at once - Mistral 403 (large is not
  * in the free tier), NVIDIA 410 (llama-3.3-70b hit end of life on 26 Aug),
  * Groq 404 (llama-3.3-70b-versatile decommissioned). Six models were
  * configured across the three; only three were ever tried, because a
@@ -97,8 +97,8 @@ describe("generateStream failover", () => {
 
       const out = await collect(generateStream({ system: SYSTEM, user: USER }));
 
-      // Asserted by shape rather than by id: these ids go stale — that is the
-      // bug this file exists for — but "fell through to a different model on
+      // Asserted by shape rather than by id: these ids go stale - that is the
+      // bug this file exists for - but "fell through to a different model on
       // the same provider" is the behaviour that must hold regardless.
       const tried = requestedModels(fetchMock);
       expect(tried).toHaveLength(2);
@@ -128,7 +128,7 @@ describe("generateStream failover", () => {
     process.env.GROQ_API_KEY = "test-key";
 
     // Which provider leads, and how many models it has, are both tuning
-    // decisions that change — so the test reads them rather than restating
+    // decisions that change - so the test reads them rather than restating
     // them. What must hold is that every model of the first provider is
     // spent before the second is touched at all.
     const configured = providerStatus().filter((p) => p.configured);
@@ -172,7 +172,7 @@ describe("providerStatus", () => {
   });
 
   // A mistyped envVar would read as "no key configured" and silently drop a
-  // provider — the same shape of invisible failure this file exists for.
+  // provider - the same shape of invisible failure this file exists for.
   it("names an env var this module actually reads, for every provider", () => {
     for (const p of providerStatus()) {
       expect(PROVIDER_KEYS).toContain(p.envVar);

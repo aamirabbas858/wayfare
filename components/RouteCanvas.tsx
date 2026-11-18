@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
  * with routes drawn between near neighbours.
  *
  * Canvas rather than SVG because there are ~40 moving nodes and a few hundred
- * candidate edges recomputed each frame — that is a lot of DOM churn for the
+ * candidate edges recomputed each frame - that is a lot of DOM churn for the
  * same result. Everything is drawn on one layer, so cost stays flat.
  *
  * It is decoration: nothing here conveys information, and it disables itself
@@ -32,7 +32,7 @@ export default function RouteCanvas({ className = "" }: { className?: string }) 
     type Node = { x: number; y: number; vx: number; vy: number; r: number; hub: boolean };
     let nodes: Node[] = [];
 
-    // Cap DPR at 2 — beyond that the extra pixels cost real frame time and
+    // Cap DPR at 2 - beyond that the extra pixels cost real frame time and
     // nobody can see the difference on a background texture.
     const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
 
@@ -129,7 +129,7 @@ export default function RouteCanvas({ className = "" }: { className?: string }) 
       frame();
     };
 
-    // Stop work entirely when the tab is hidden — no point animating a
+    // Stop work entirely when the tab is hidden - no point animating a
     // background nobody is looking at.
     const onVisibility = () => {
       running = !document.hidden;
